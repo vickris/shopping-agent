@@ -4,15 +4,41 @@ defmodule DealAgent.Shopping.ShoppingListTest do
   alias DealAgent.Shopping.Item
   alias DealAgent.Shopping.ShoppingList
 
-  test "adds an item" do
+  test "creates item with quantity and unit" do
+    item =
+      Item.new(
+        "Milk",
+        quantity: "2",
+        unit: :litre
+      )
+
+    assert item.name == "Milk"
+    assert Decimal.equal?(item.quantity, Decimal.new("2"))
+    assert item.unit == :litre
+  end
+
+  test "updates an existing item" do
     item = Item.new("Milk")
 
     list =
       ShoppingList.new()
       |> ShoppingList.add_item(item)
+      |> ShoppingList.update_item(
+        item.id,
+        %{
+          quantity: Decimal.new("2"),
+          unit: :litre
+        }
+      )
 
-    assert ShoppingList.count(list) == 1
-    assert hd(list.items).name == "Milk"
+    updated = hd(list.items)
+
+    assert Decimal.equal?(
+             updated.quantity,
+             Decimal.new("2")
+           )
+
+    assert updated.unit == :litre
   end
 
   test "removes an item by id" do

@@ -5,9 +5,10 @@ defmodule DealAgent.Shopping.ShoppingList do
   alias DealAgent.Shopping.Item
 
   defstruct items: []
+
   @type t :: %__MODULE__{
-        items: [Item.t()]
-      }
+          items: [Item.t()]
+        }
 
   @spec new() :: t()
   def new do
@@ -30,6 +31,20 @@ defmodule DealAgent.Shopping.ShoppingList do
     %{list | items: items}
   end
 
+  @spec update_item(t(), String.t(), map()) :: t()
+  def update_item(%__MODULE__{} = list, item_id, attrs) do
+    items =
+      Enum.map(list.items, fn
+        %Item{id: ^item_id} = item ->
+          update_item_fields(item, attrs)
+
+        item ->
+          item
+      end)
+
+    %{list | items: items}
+  end
+
   @spec empty?(t()) :: boolean()
   def empty?(%__MODULE__{items: items}) do
     items == []
@@ -38,5 +53,15 @@ defmodule DealAgent.Shopping.ShoppingList do
   @spec count(t()) :: non_neg_integer()
   def count(%__MODULE__{items: items}) do
     length(items)
+  end
+
+  defp update_item_fields(item, attrs) do
+    %{
+      item
+      | name: Map.get(attrs, :name, item.name),
+        quantity: Map.get(attrs, :quantity, item.quantity),
+        unit: Map.get(attrs, :unit, item.unit),
+        notes: Map.get(attrs, :notes, item.notes)
+    }
   end
 end

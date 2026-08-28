@@ -11,22 +11,33 @@
     <.form
       for={@form}
       phx-submit="add-item"
-      class="mt-8"
+      class="mt-8 grid gap-3 md:grid-cols-[1fr_120px_160px_auto]"
     >
-      <div class="flex gap-2">
-        <.input
-          field={@form[:item_name]}
-          placeholder="e.g. Milk"
-          autocomplete="off"
-        />
+      <.input
+        field={@form[:item_name]}
+        placeholder="Milk"
+        autocomplete="off"
+      />
 
-        <button
-          type="submit"
-          class="rounded bg-black px-4 py-2 text-white"
-        >
-          Add item
-        </button>
-      </div>
+      <.input
+        field={@form[:quantity]}
+        type="number"
+        min="0.01"
+        step="0.01"
+      />
+
+      <.input
+        field={@form[:unit]}
+        type="select"
+        options={@units}
+      />
+
+      <button
+        type="submit"
+        class="rounded bg-black px-4 py-2 text-white"
+      >
+        Add
+      </button>
     </.form>
   </div>
 
@@ -46,9 +57,16 @@
             id={"shopping-item-#{item.id}"}
             class="flex items-center justify-between rounded border p-3"
           >
-            <span>
-              {item.name}
-            </span>
+            <div>
+              <p class="font-medium">
+                {item.name}
+              </p>
+
+              <p class="text-sm text-gray-500">
+                {Decimal.to_string(item.quantity, :normal)}
+                {format_unit(item.unit)}
+              </p>
+            </div>
 
             <button
               phx-click="remove-item"
