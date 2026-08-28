@@ -1,0 +1,65 @@
+<div class="mx-auto max-w-3xl p-8">
+  <h1 class="text-3xl font-bold">
+    Deal Agent
+  </h1>
+
+  <p class="mt-2 text-gray-600">
+    Build your shopping list before comparing supermarkets.
+  </p>
+
+  <div class="mt-8">
+    <.form
+      for={@form}
+      phx-submit="add-item"
+      class="mt-8"
+    >
+      <div class="flex gap-2">
+        <.input
+          field={@form[:item_name]}
+          placeholder="e.g. Milk"
+          autocomplete="off"
+        />
+
+        <button
+          type="submit"
+          class="rounded bg-black px-4 py-2 text-white"
+        >
+          Add item
+        </button>
+      </div>
+    </.form>
+  </div>
+
+  <div class="mt-8">
+    <h2 class="text-xl font-semibold">
+      Shopping List
+    </h2>
+
+    <%= if ShoppingList.empty?(@shopping_list) do %>
+      <p class="mt-4 text-gray-500">
+        Your shopping list is empty.
+      </p>
+    <% else %>
+      <ul class="mt-4 space-y-2">
+        <%= for item <- @shopping_list.items do %>
+          <li
+            id={"shopping-item-#{item.id}"}
+            class="flex items-center justify-between rounded border p-3"
+          >
+            <span>
+              {item.name}
+            </span>
+
+            <button
+              phx-click="remove-item"
+              phx-value-id={item.id}
+              class="text-sm text-red-600"
+            >
+              Remove
+            </button>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </div>
+</div>
