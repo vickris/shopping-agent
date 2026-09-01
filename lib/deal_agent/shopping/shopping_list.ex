@@ -64,4 +64,9 @@ defmodule DealAgent.Shopping.ShoppingList do
         notes: Map.get(attrs, :notes, item.notes)
     }
   end
+
+  @spec clear(t()) :: t()
+  def clear(%__MODULE__{}) do
+    new()
+  end
 end

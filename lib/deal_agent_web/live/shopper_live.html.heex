@@ -13,6 +13,7 @@
         for={@item_form}
         phx-submit="add-item"
         class="mt-8 grid gap-3 md:grid-cols-[1fr_120px_160px_auto]"
+        id="shopping-item-form"
       >
         <.input
           field={@item_form[:item_name]}
@@ -123,6 +124,7 @@
       for={@chat_form}
       phx-submit="send-message"
       class="border-t p-4"
+      id="chat-form"
     >
       <div class="flex gap-2">
         <.input

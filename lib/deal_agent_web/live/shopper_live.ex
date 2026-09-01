@@ -190,18 +190,9 @@ defmodule DealAgentWeb.ShopperLive do
     )
   end
 
-  defp deterministic_reply(message) do
-    """
-    I received: "#{message}"
-
-    I am not connected to the shopping agent yet.
-    """
-    |> String.trim()
-  end
-
   defp handle_chat_command(
          "clear list",
-         shopping_list
+         _shopping_list
        ) do
     {
       ShoppingList.new(),
