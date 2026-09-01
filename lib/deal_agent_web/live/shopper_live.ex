@@ -4,6 +4,8 @@ defmodule DealAgentWeb.ShopperLive do
   alias DealAgent.Chat.Message
   alias DealAgent.Shopping.Item
   alias DealAgent.Shopping.ShoppingList
+  alias DealAgent.Shopping.IntentHandler
+  alias DealAgent.Shopping.IntentParser
 
   @impl true
   def mount(_params, _session, socket) do
@@ -46,7 +48,7 @@ defmodule DealAgentWeb.ShopperLive do
       {:noreply,
        socket
        |> assign(:shopping_list, shopping_list)
-       |> assign_form(%{
+       |> assign_item_form(%{
          "item_name" => "",
          "quantity" => "1",
          "unit" => "each"
@@ -97,42 +99,47 @@ defmodule DealAgentWeb.ShopperLive do
     if content == "" do
       {:noreply, socket}
     else
-      user_message =
-        Message.new(:user, content)
+      intent =
+        IntentParser.parse(content)
 
       {
         shopping_list,
-        response
+        assistant_reply
       } =
-        handle_chat_command(
-          String.downcase(content),
+        apply_intent(
+          intent,
           socket.assigns.shopping_list
         )
-
-      assistant_message =
-        Message.new(:assistant, response)
 
       {:noreply,
        socket
        |> assign(
          :messages,
          socket.assigns.messages ++
-           [user_message, assistant_message]
+           [Message.new(:user, content), Message.new(:assistant, assistant_reply)]
        )
        |> assign(:shopping_list, shopping_list)
        |> assign_chat_form()}
     end
   end
 
-  defp assign_form(socket, params) do
-    assign(
-      socket,
-      :form,
-      to_form(
-        params,
-        as: :shopping_item
-      )
-    )
+  defp apply_intent(
+         intent,
+         shopping_list
+       ) do
+    case IntentHandler.handle(
+           intent,
+           shopping_list
+         ) do
+      {:ok, updated, message} ->
+        {updated, message}
+
+      {:compare, unchanged, message} ->
+        {unchanged, message}
+
+      {:error, unchanged, message} ->
+        {unchanged, message}
+    end
   end
 
   defp parse_quantity(value) do
