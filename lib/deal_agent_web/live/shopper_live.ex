@@ -1,6 +1,7 @@
 defmodule DealAgentWeb.ShopperLive do
   use DealAgentWeb, :live_view
 
+  alias DealAgent.Chat.Message
   alias DealAgent.Shopping.Item
   alias DealAgent.Shopping.ShoppingList
 
@@ -10,11 +11,9 @@ defmodule DealAgentWeb.ShopperLive do
      socket
      |> assign(:shopping_list, ShoppingList.new())
      |> assign(:units, Item.units())
-     |> assign_form(%{
-       "item_name" => "",
-       "quantity" => "1",
-       "unit" => "each"
-     })}
+     |> assign(:messages, [])
+     |> assign_item_form()
+     |> assign_chat_form()}
   end
 
   @impl true
@@ -87,6 +86,44 @@ defmodule DealAgentWeb.ShopperLive do
      )}
   end
 
+  @impl true
+  def handle_event(
+        "send-message",
+        %{"chat" => %{"message" => content}},
+        socket
+      ) do
+    content = String.trim(content)
+
+    if content == "" do
+      {:noreply, socket}
+    else
+      user_message =
+        Message.new(:user, content)
+
+      {
+        shopping_list,
+        response
+      } =
+        handle_chat_command(
+          String.downcase(content),
+          socket.assigns.shopping_list
+        )
+
+      assistant_message =
+        Message.new(:assistant, response)
+
+      {:noreply,
+       socket
+       |> assign(
+         :messages,
+         socket.assigns.messages ++
+           [user_message, assistant_message]
+       )
+       |> assign(:shopping_list, shopping_list)
+       |> assign_chat_form()}
+    end
+  end
+
   defp assign_form(socket, params) do
     assign(
       socket,
@@ -128,4 +165,57 @@ defmodule DealAgentWeb.ShopperLive do
   defp format_unit(:kilogram), do: " kg"
   defp format_unit(:millilitre), do: " ml"
   defp format_unit(:litre), do: " L"
+
+  defp assign_item_form(socket, params \\ nil) do
+    params =
+      params ||
+        %{
+          "item_name" => "",
+          "quantity" => "1",
+          "unit" => "each"
+        }
+
+    assign(
+      socket,
+      :item_form,
+      to_form(params, as: :shopping_item)
+    )
+  end
+
+  defp assign_chat_form(socket, params \\ %{"message" => ""}) do
+    assign(
+      socket,
+      :chat_form,
+      to_form(params, as: :chat)
+    )
+  end
+
+  defp deterministic_reply(message) do
+    """
+    I received: "#{message}"
+
+    I am not connected to the shopping agent yet.
+    """
+    |> String.trim()
+  end
+
+  defp handle_chat_command(
+         "clear list",
+         shopping_list
+       ) do
+    {
+      ShoppingList.new(),
+      "Your shopping list has been cleared."
+    }
+  end
+
+  defp handle_chat_command(
+         _message,
+         shopping_list
+       ) do
+    {
+      shopping_list,
+      "I received your message. Natural-language shopping commands are not enabled yet."
+    }
+  end
 end

@@ -1,83 +1,143 @@
 <div class="mx-auto max-w-3xl p-8">
-  <h1 class="text-3xl font-bold">
-    Deal Agent
-  </h1>
+  <section>
+    <h1 class="text-3xl font-bold">
+      Deal Agent
+    </h1>
 
-  <p class="mt-2 text-gray-600">
-    Build your shopping list before comparing supermarkets.
-  </p>
+    <p class="mt-2 text-gray-600">
+      Build your shopping list before comparing supermarkets.
+    </p>
 
-  <div class="mt-8">
-    <.form
-      for={@form}
-      phx-submit="add-item"
-      class="mt-8 grid gap-3 md:grid-cols-[1fr_120px_160px_auto]"
-    >
-      <.input
-        field={@form[:item_name]}
-        placeholder="Milk"
-        autocomplete="off"
-      />
-
-      <.input
-        field={@form[:quantity]}
-        type="number"
-        min="0.01"
-        step="0.01"
-      />
-
-      <.input
-        field={@form[:unit]}
-        type="select"
-        options={@units}
-      />
-
-      <button
-        type="submit"
-        class="rounded bg-black px-4 py-2 text-white"
+    <div class="mt-8">
+      <.form
+        for={@item_form}
+        phx-submit="add-item"
+        class="mt-8 grid gap-3 md:grid-cols-[1fr_120px_160px_auto]"
       >
-        Add
-      </button>
-    </.form>
-  </div>
+        <.input
+          field={@item_form[:item_name]}
+          placeholder="Milk"
+          autocomplete="off"
+        />
 
-  <div class="mt-8">
-    <h2 class="text-xl font-semibold">
-      Shopping List
-    </h2>
+        <.input
+          field={@item_form[:quantity]}
+          type="number"
+          min="0.01"
+          step="0.01"
+        />
 
-    <%= if ShoppingList.empty?(@shopping_list) do %>
-      <p class="mt-4 text-gray-500">
-        Your shopping list is empty.
-      </p>
-    <% else %>
-      <ul class="mt-4 space-y-2">
-        <%= for item <- @shopping_list.items do %>
-          <li
-            id={"shopping-item-#{item.id}"}
-            class="flex items-center justify-between rounded border p-3"
-          >
-            <div>
-              <p class="font-medium">
-                {item.name}
-              </p>
+        <.input
+          field={@item_form[:unit]}
+          type="select"
+          options={@units}
+        />
 
-              <p class="text-sm text-gray-500">
-                {Decimal.to_string(item.quantity, :normal)}
-                {format_unit(item.unit)}
-              </p>
-            </div>
+        <button
+          type="submit"
+          class="rounded bg-black px-4 py-2 text-white"
+        >
+          Add
+        </button>
+      </.form>
+    </div>
 
-            <button
-              phx-click="remove-item"
-              phx-value-id={item.id}
-              class="text-sm text-red-600"
+    <div class="mt-8">
+      <h2 class="text-xl font-semibold">
+        Shopping List
+      </h2>
+
+      <%= if ShoppingList.empty?(@shopping_list) do %>
+        <p class="mt-4 text-gray-500">
+          Your shopping list is empty.
+        </p>
+      <% else %>
+        <ul class="mt-4 space-y-2">
+          <%= for item <- @shopping_list.items do %>
+            <li
+              id={"shopping-item-#{item.id}"}
+              class="flex items-center justify-between rounded border p-3"
             >
-              Remove
-            </button>
-          </li>
-        <% end %>
-      </ul>
-    <% end %>
-  </div>
+              <div>
+                <p class="font-medium">
+                  {item.name}
+                </p>
+
+                <p class="text-sm text-gray-500">
+                  {Decimal.to_string(item.quantity, :normal)}
+                  {format_unit(item.unit)}
+                </p>
+              </div>
+
+              <button
+                phx-click="remove-item"
+                phx-value-id={item.id}
+                class="text-sm text-red-600"
+              >
+                Remove
+              </button>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+    </div>
+  </section>
+  <section class="flex min-h-[600px] flex-col rounded-xl border">
+    <div class="border-b p-4">
+      <h2 class="text-xl font-semibold">
+        Shopper Assistant
+      </h2>
+
+      <p class="text-sm text-gray-500">
+        Ask questions or manage your shopping list.
+      </p>
+    </div>
+
+    <div
+      id="chat-messages"
+      class="flex-1 space-y-4 overflow-y-auto p-4"
+    >
+      <%= if @messages == [] do %>
+        <p class="text-sm text-gray-500">
+          Start by asking me something about your shopping.
+        </p>
+      <% end %>
+
+      <%= for message <- @messages do %>
+        <div
+          id={"message-#{message.id}"}
+          class={[
+            "max-w-[80%] rounded-xl px-4 py-3",
+            message.role == :user &&
+              "ml-auto bg-gray-900 text-white",
+            message.role == :assistant &&
+              "mr-auto bg-gray-100 text-gray-900"
+          ]}
+        >
+          {message.content}
+        </div>
+      <% end %>
+    </div>
+
+    <.form
+      for={@chat_form}
+      phx-submit="send-message"
+      class="border-t p-4"
+    >
+      <div class="flex gap-2">
+        <.input
+          field={@chat_form[:message]}
+          placeholder="Ask your shopper..."
+          autocomplete="off"
+        />
+
+        <button
+          type="submit"
+          class="rounded bg-black px-4 py-2 text-white"
+        >
+          Send
+        </button>
+      </div>
+    </.form>
+  </section>
 </div>
