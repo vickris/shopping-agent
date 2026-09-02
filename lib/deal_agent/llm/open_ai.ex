@@ -1,5 +1,5 @@
 defmodule DealAgent.LLM.OpenAI do
-  @behaviour BeamAgent.LLM.Behaviour
+  @behaviour BeamAgent.LLM.Client
 
   @endpoint "https://api.openai.com/v1/responses"
 
@@ -37,7 +37,8 @@ defmodule DealAgent.LLM.OpenAI do
            json: body,
            headers: [
              {"authorization", "Bearer #{api_key}"}
-           ]
+           ],
+           retry: false
          ) do
       {:ok, %{status: 200, body: body}} ->
         decode_response(body)

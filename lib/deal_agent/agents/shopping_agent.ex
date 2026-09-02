@@ -37,7 +37,7 @@ defmodule DealAgent.Agents.ShoppingAgent do
       guardrails: [
         max_iterations: 3,
         max_tool_calls: 1,
-        max_execution_time_ms: 10_000
+        max_execution_time_ms: 100_000
       ]
     )
   end
@@ -64,6 +64,8 @@ defmodule DealAgent.Agents.ShoppingAgent do
   end
 
   defp extract_intent(run) do
+    IO.inspect(run, label: "run", limit: :infinity)
+
     run.trace
     |> Enum.reverse()
     |> Enum.find(fn step ->
