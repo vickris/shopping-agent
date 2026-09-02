@@ -20,6 +20,9 @@ config :deal_agent, DealAgentWeb.Endpoint,
   secret_key_base: "KcAXqxQR1uvUuVGGcj/9LEuaHIIzmXvTE2eAkIVDNrBXSnWwyO81mWL4ZmlfD/XB",
   server: false
 
+# Drive the shopping agent with a deterministic, offline LLM client
+config :deal_agent, :shopping_agent_llm, {TestLLM, []}
+
 # In test we don't send emails
 config :deal_agent, DealAgent.Mailer, adapter: Swoosh.Adapters.Test
 

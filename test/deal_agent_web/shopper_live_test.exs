@@ -54,4 +54,33 @@ defmodule DealAgentWeb.ShopperLiveTest do
              "Milk"
            )
   end
+
+  test "adds an item through chat asynchronously", %{conn: conn} do
+    {:ok, view, _html} =
+      live(conn, "/")
+
+    html =
+      view
+      |> form("#chat-form",
+        chat: %{
+          message: "Add two litres of milk"
+        }
+      )
+      |> render_submit()
+
+    assert html =~ "agent-thinking"
+
+    render_async(view)
+
+    assert has_element?(
+             view,
+             "[id^='shopping-item-']",
+             "milk"
+           )
+
+    refute has_element?(
+             view,
+             "#agent-thinking"
+           )
+  end
 end

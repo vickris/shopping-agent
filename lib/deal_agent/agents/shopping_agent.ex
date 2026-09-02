@@ -1,27 +1,34 @@
 defmodule DealAgent.Agents.ShoppingAgent do
   @moduledoc """
-  Interprets natural-language shopping commands using BeamAgent.
+  Interprets natural-language shopping requests into structured
+  Shopping.Intent values using BeamAgent.
   """
 
   alias DealAgent.Shopping.IntentConverter
 
+  @spec interpret(String.t()) ::
+          {:ok, DealAgent.Shopping.Intent.t()}
+          | {:error, term()}
+  def interpret(input) when is_binary(input) do
+    interpret(input, [])
+  end
+
   @spec interpret(String.t(), keyword()) ::
           {:ok, DealAgent.Shopping.Intent.t()}
           | {:error, term()}
-  def interpret(input, opts \\ []) do
+  def interpret(input, opts) do
     llm =
       opts
       |> Keyword.get_lazy(:llm, &default_llm/0)
       |> normalize_llm()
 
-    run =
-      case run_agent(input, llm) do
-        {:ok, run} -> run
-        {:error, run} -> run
-      end
-
-    with {:ok, payload} <- extract_intent(run),
-         {:ok, intent} <- IntentConverter.convert(payload, input) do
+    with {:ok, run} <- run_agent(input, llm),
+         {:ok, payload} <- extract_payload(run),
+         {:ok, intent} <-
+           IntentConverter.convert(
+             payload,
+             input
+           ) do
       {:ok, intent}
     end
   end
@@ -47,6 +54,10 @@ defmodule DealAgent.Agents.ShoppingAgent do
   defp normalize_llm(module) when is_atom(module), do: {module, []}
 
   defp default_llm do
+    Application.get_env(:deal_agent, :shopping_agent_llm) || openai_llm()
+  end
+
+  defp openai_llm do
     {
       DealAgent.LLM.OpenAI,
       [
@@ -63,9 +74,7 @@ defmodule DealAgent.Agents.ShoppingAgent do
     }
   end
 
-  defp extract_intent(run) do
-    IO.inspect(run, label: "run", limit: :infinity)
-
+  defp extract_payload(run) do
     run.trace
     |> Enum.reverse()
     |> Enum.find(fn step ->

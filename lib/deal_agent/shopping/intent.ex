@@ -31,7 +31,8 @@ defmodule DealAgent.Shopping.Intent do
     %__MODULE__{
       action: :add_item,
       item: item,
-      raw_input: raw_input
+      raw_input: raw_input,
+      item_name: item.name
     }
   end
 

@@ -118,6 +118,14 @@
           {message.content}
         </div>
       <% end %>
+
+      <div
+        :if={@agent_status == :thinking}
+        id="agent-thinking"
+        class="mr-auto max-w-[80%] rounded-xl bg-gray-100 px-4 py-3 text-gray-500"
+      >
+        Looking at your request...
+      </div>
     </div>
 
     <.form
@@ -130,12 +138,20 @@
         <.input
           field={@chat_form[:message]}
           placeholder="Ask your shopper..."
+          disabled={@agent_status == :thinking}
           autocomplete="off"
         />
 
         <button
           type="submit"
-          class="rounded bg-black px-4 py-2 text-white"
+          disabled={@agent_status == :thinking}
+          class={[
+            "rounded px-4 py-2 text-white",
+            @agent_status == :thinking &&
+              "cursor-not-allowed bg-gray-400",
+            @agent_status != :thinking &&
+              "bg-black"
+          ]}
         >
           Send
         </button>

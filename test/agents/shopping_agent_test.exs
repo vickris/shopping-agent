@@ -30,7 +30,8 @@ defmodule DealAgent.Agents.ShoppingAgentTest do
   test "returns an error for unrecognized commands" do
     input = "hello world"
 
-    assert {:error, :intent_not_captured} =
+    assert {:error,
+            %BeamAgent.Run{verification_error: {:missing_required_tools, [:capture_intent]}}} =
              ShoppingAgent.interpret(input, llm: {TestLLM, []})
   end
 end

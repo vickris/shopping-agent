@@ -1,11 +1,11 @@
 defmodule DealAgentWeb.ShopperLive do
   use DealAgentWeb, :live_view
 
+  alias DealAgent.Agents.ShoppingAgent
   alias DealAgent.Chat.Message
+  alias DealAgent.Shopping.IntentHandler
   alias DealAgent.Shopping.Item
   alias DealAgent.Shopping.ShoppingList
-  alias DealAgent.Shopping.IntentHandler
-  alias DealAgent.Shopping.IntentParser
 
   @impl true
   def mount(_params, _session, socket) do
@@ -14,6 +14,7 @@ defmodule DealAgentWeb.ShopperLive do
      |> assign(:shopping_list, ShoppingList.new())
      |> assign(:units, Item.units())
      |> assign(:messages, [])
+     |> assign(:agent_status, :idle)
      |> assign_item_form()
      |> assign_chat_form()}
   end
@@ -96,49 +97,116 @@ defmodule DealAgentWeb.ShopperLive do
       ) do
     content = String.trim(content)
 
-    if content == "" do
-      {:noreply, socket}
-    else
-      intent =
-        IntentParser.parse(content)
+    cond do
+      content == "" ->
+        {:noreply, socket}
 
-      {
-        shopping_list,
-        assistant_reply
-      } =
-        apply_intent(
-          intent,
-          socket.assigns.shopping_list
-        )
+      command = chat_command(content) ->
+        {:noreply, run_chat_command(socket, content, command)}
 
-      {:noreply,
-       socket
-       |> assign(
-         :messages,
-         socket.assigns.messages ++
-           [Message.new(:user, content), Message.new(:assistant, assistant_reply)]
-       )
-       |> assign(:shopping_list, shopping_list)
-       |> assign_chat_form()}
+      true ->
+        user_message =
+          Message.new(:user, content)
+
+        messages =
+          socket.assigns.messages ++
+            [user_message]
+
+        socket =
+          socket
+          |> assign(
+            :messages,
+            messages
+          )
+          |> assign(:agent_status, :thinking)
+          |> assign_chat_form()
+
+        {:noreply,
+         start_async(
+           socket,
+           {:interpret_message, user_message.id},
+           fn ->
+             ShoppingAgent.interpret(content)
+           end
+         )}
     end
   end
 
-  defp apply_intent(
-         intent,
-         shopping_list
+  @impl true
+  def handle_async(
+        {:interpret_message, _message_id},
+        {:ok, {:ok, intent}},
+        socket
+      ) do
+    {:noreply, apply_shopping_intent(socket, intent)}
+  end
+
+  def handle_async(
+        {:interpret_message, _message_id},
+        {:ok, {:error, reason}},
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> append_assistant_message(agent_error_message(reason))
+     |> assign(:agent_status, :idle)}
+  end
+
+  def handle_async(
+        {:interpret_message, _message_id},
+        {:exit, reason},
+        socket
+      ) do
+    require Logger
+
+    Logger.error("Shopping agent async task failed: #{inspect(reason)}")
+
+    {:noreply,
+     socket
+     |> append_assistant_message("Something went wrong while processing your request.")
+     |> assign(:agent_status, :idle)}
+  end
+
+  defp agent_error_message(_reason) do
+    "I couldn't understand that shopping request. Please try rephrasing it."
+  end
+
+  defp append_assistant_message(socket, content) do
+    assistant_message =
+      Message.new(:assistant, content)
+
+    messages =
+      socket.assigns.messages ++
+        [assistant_message]
+
+    assign(socket, :messages, messages)
+  end
+
+  defp apply_shopping_intent(
+         socket,
+         intent
        ) do
     case IntentHandler.handle(
            intent,
-           shopping_list
+           socket.assigns.shopping_list
          ) do
-      {:ok, updated, message} ->
-        {updated, message}
+      {:ok, shopping_list, reply} ->
+        socket
+        |> assign(:shopping_list, shopping_list)
+        |> append_assistant_message(reply)
+        |> assign(:agent_status, :idle)
 
-      {:compare, unchanged, message} ->
-        {unchanged, message}
+      {:compare, shopping_list, reply} ->
+        socket
+        |> assign(:shopping_list, shopping_list)
+        |> append_assistant_message(reply)
+        |> assign(:agent_status, :idle)
 
-      {:error, unchanged, message} ->
-        {unchanged, message}
+      {:error, shopping_list, reply} ->
+        socket
+        |> assign(:shopping_list, shopping_list)
+        |> append_assistant_message(reply)
+        |> assign(:agent_status, :idle)
     end
   end
 
@@ -197,23 +265,22 @@ defmodule DealAgentWeb.ShopperLive do
     )
   end
 
-  defp handle_chat_command(
-         "clear list",
-         _shopping_list
-       ) do
-    {
-      ShoppingList.new(),
-      "Your shopping list has been cleared."
-    }
+  # Commands handled locally, without a round-trip through the agent/LLM.
+  defp chat_command(content) do
+    case String.downcase(content) do
+      "clear list" -> :clear_list
+      _ -> nil
+    end
   end
 
-  defp handle_chat_command(
-         _message,
-         shopping_list
-       ) do
-    {
-      shopping_list,
-      "I received your message. Natural-language shopping commands are not enabled yet."
-    }
+  defp run_chat_command(socket, content, :clear_list) do
+    user_message = Message.new(:user, content)
+
+    socket
+    |> assign(:messages, socket.assigns.messages ++ [user_message])
+    |> assign(:shopping_list, ShoppingList.new())
+    |> append_assistant_message("Your shopping list has been cleared.")
+    |> assign(:agent_status, :idle)
+    |> assign_chat_form()
   end
 end
