@@ -56,8 +56,8 @@ defmodule TestLLM do
     case text |> String.downcase() |> String.split(~r/[^a-z0-9.]+/, trim: true) do
       ["add" | rest] -> capture_add(rest)
       ["remove" | rest] -> capture_remove(rest)
-      ["clear" | _] -> {:tool_call, :capture_intent, %{action: "clear_list"}}
-      ["compare" | _] -> {:tool_call, :capture_intent, %{action: "compare"}}
+      ["clear" | _] -> tool_call(:capture_intent, %{action: "clear_list"})
+      ["compare" | _] -> tool_call(:capture_intent, %{action: "compare"})
       _other -> {:reply, "I can't help with that."}
     end
   end
@@ -76,12 +76,24 @@ defmodule TestLLM do
       |> maybe_put(:quantity, quantity)
       |> maybe_put(:unit, unit && Atom.to_string(unit))
 
-    {:tool_call, :capture_intent, args}
+    tool_call(:capture_intent, args)
   end
 
   defp capture_remove(words) do
     name = words |> Enum.reject(&(&1 == "of")) |> Enum.join(" ")
-    {:tool_call, :capture_intent, %{action: "remove_item", name: name}}
+    tool_call(:capture_intent, %{action: "remove_item", name: name})
+  end
+
+  # A real provider returns a stable identifier for each tool call so the
+  # follow-up tool result can be correlated back to it; the test client
+  # just generates a unique one.
+  defp tool_call(name, arguments) do
+    {:tool_call,
+     %{
+       id: "test-call-" <> Integer.to_string(System.unique_integer([:positive])),
+       name: name,
+       arguments: arguments
+     }}
   end
 
   defp take_quantity([word | rest]) when is_map_key(@number_words, word) do
