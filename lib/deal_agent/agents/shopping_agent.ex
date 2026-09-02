@@ -5,33 +5,32 @@ defmodule DealAgent.Agents.ShoppingAgent do
 
   alias DealAgent.Shopping.IntentConverter
 
-  @spec interpret(String.t()) ::
+  @spec interpret(String.t(), keyword()) ::
           {:ok, DealAgent.Shopping.Intent.t()}
           | {:error, term()}
   def interpret(input, opts \\ []) do
     llm =
-      Keyword.get_lazy(
-        opts,
-        :llm,
-        &default_llm/0
-      )
+      opts
+      |> Keyword.get_lazy(:llm, &default_llm/0)
+      |> normalize_llm()
 
-    with {:ok, run} <- run_agent(input),
-         {:ok, payload} <- extract_intent(run),
-         {:ok, intent} <-
-           IntentConverter.convert(
-             payload,
-             input
-           ) do
+    run =
+      case run_agent(input, llm) do
+        {:ok, run} -> run
+        {:error, run} -> run
+      end
+
+    with {:ok, payload} <- extract_intent(run),
+         {:ok, intent} <- IntentConverter.convert(payload, input) do
       {:ok, intent}
     end
   end
 
-  defp run_agent(input) do
+  defp run_agent(input, llm) do
     BeamAgent.API.run(
       input,
-      llm: llm(),
-      tools: DealAgent.Tools.Registry,
+      llm: llm,
+      tools: DealAgent.Tools.Registry.tools(),
       verification: [
         required_tools: [:capture_intent]
       ],
@@ -43,6 +42,12 @@ defmodule DealAgent.Agents.ShoppingAgent do
     )
   end
 
+  # `:llm` may be given as `{module, opts}` or a bare `module`.
+  defp normalize_llm({module, opts}) when is_atom(module) and is_list(opts), do: {module, opts}
+  defp normalize_llm(module) when is_atom(module), do: {module, []}
+
+  defp default_llm, do: BeamAgent.LLM.Mock
+
   defp extract_intent(run) do
     run.trace
     |> Enum.reverse()
@@ -51,11 +56,8 @@ defmodule DealAgent.Agents.ShoppingAgent do
         step.payload.tool == :capture_intent
     end)
     |> case do
-      nil ->
-        {:error, :intent_not_captured}
-
-      step ->
-        {:ok, step.payload.result}
+      nil -> {:error, :intent_not_captured}
+      step -> {:ok, step.payload.result}
     end
   end
 end

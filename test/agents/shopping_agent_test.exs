@@ -7,7 +7,7 @@ defmodule DealAgent.Agents.ShoppingAgentTest do
   test "interprets a simple add item command" do
     input = "Add two litres of milk"
 
-    assert {:ok, %Intent{type: :add_item} = intent} =
+    assert {:ok, %Intent{action: :add_item} = intent} =
              ShoppingAgent.interpret(input, llm: {TestLLM, []})
 
     assert intent.item.name == "milk"
@@ -23,14 +23,14 @@ defmodule DealAgent.Agents.ShoppingAgentTest do
   test "interprets a simple remove item command" do
     input = "remove milk"
 
-    assert {:ok, %Intent{type: :remove_item}} =
-             ShoppingAgent.interpret(input)
+    assert {:ok, %Intent{action: :remove_item}} =
+             ShoppingAgent.interpret(input, llm: {TestLLM, []})
   end
 
   test "returns an error for unrecognized commands" do
     input = "hello world"
 
     assert {:error, :intent_not_captured} =
-             ShoppingAgent.interpret(input)
+             ShoppingAgent.interpret(input, llm: {TestLLM, []})
   end
 end
