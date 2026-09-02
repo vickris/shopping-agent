@@ -18,6 +18,47 @@ defmodule DealAgent.Tools.CaptureIntent do
     """
   end
 
+  def parameters do
+    %{
+      type: "object",
+      properties: %{
+        action: %{
+          type: "string",
+          enum: [
+            "add_item",
+            "remove_item",
+            "clear_list",
+            "compare"
+          ]
+        },
+        name: %{
+          type: ["string", "null"]
+        },
+        quantity: %{
+          type: ["string", "null"]
+        },
+        unit: %{
+          type: ["string", "null"],
+          enum: [
+            "each",
+            "gram",
+            "kilogram",
+            "millilitre",
+            "litre",
+            nil
+          ]
+        }
+      },
+      required: [
+        "action",
+        "name",
+        "quantity",
+        "unit"
+      ],
+      additionalProperties: false
+    }
+  end
+
   @impl true
   def execute(args) when is_map(args) do
     {:ok, normalize(args)}

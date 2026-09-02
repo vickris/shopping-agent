@@ -46,7 +46,22 @@ defmodule DealAgent.Agents.ShoppingAgent do
   defp normalize_llm({module, opts}) when is_atom(module) and is_list(opts), do: {module, opts}
   defp normalize_llm(module) when is_atom(module), do: {module, []}
 
-  defp default_llm, do: BeamAgent.LLM.Mock
+  defp default_llm do
+    {
+      DealAgent.LLM.OpenAI,
+      [
+        api_key:
+          Application.fetch_env!(
+            :deal_agent,
+            :openai_api_key
+          ),
+        model: "gpt-5.6-luna",
+        tools: [
+          DealAgent.Tools.CaptureIntent
+        ]
+      ]
+    }
+  end
 
   defp extract_intent(run) do
     run.trace
