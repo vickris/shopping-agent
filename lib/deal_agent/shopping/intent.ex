@@ -6,7 +6,8 @@ defmodule DealAgent.Shopping.Intent do
   alias DealAgent.Shopping.Item
 
   @type action ::
-          :add_item
+          :add_items
+          | :add_item
           | :remove_item
           | :clear_list
           | :compare
@@ -15,6 +16,7 @@ defmodule DealAgent.Shopping.Intent do
   @type t :: %__MODULE__{
           action: action(),
           item: Item.t() | nil,
+          items: [Item.t()],
           item_name: String.t() | nil,
           raw_input: String.t() | nil
         }
@@ -23,7 +25,8 @@ defmodule DealAgent.Shopping.Intent do
     :action,
     :item,
     :item_name,
-    :raw_input
+    :raw_input,
+    items: []
   ]
 
   @spec add_item(Item.t(), String.t()) :: t()
@@ -34,6 +37,10 @@ defmodule DealAgent.Shopping.Intent do
       raw_input: raw_input,
       item_name: item.name
     }
+  end
+
+  def add_items(items, raw_input) do
+    %__MODULE__{action: :add_items, items: items, raw_input: raw_input}
   end
 
   @spec remove_item(String.t(), String.t()) :: t()

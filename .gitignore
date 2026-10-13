@@ -35,3 +35,6 @@ deal_agent-*.tar
 npm-debug.log
 /assets/node_modules/
 
+
+# Carrefour browser runtime installed with npm
+/priv/carrefour_browser/node_modules/

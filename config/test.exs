@@ -22,6 +22,9 @@ config :deal_agent, DealAgentWeb.Endpoint,
 
 # Drive the shopping agent with a deterministic, offline LLM client
 config :deal_agent, :shopping_agent_llm, {TestLLM, []}
+config :deal_agent, :quickmart_search_options, client: DealAgent.Supermarkets.Quickmart.MockClient
+config :deal_agent, :carrefour_browser_fallback, false
+config :deal_agent, :carrefour_search_options, client: DealAgent.Supermarkets.Carrefour.MockClient
 
 # In test we don't send emails
 config :deal_agent, DealAgent.Mailer, adapter: Swoosh.Adapters.Test
@@ -38,3 +41,7 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+config :deal_agent, :naivas_search_options, client: DealAgent.Supermarkets.Naivas.MockClient
+
+config :deal_agent, :cart_runtime, DealAgent.Checkout.TestRuntime

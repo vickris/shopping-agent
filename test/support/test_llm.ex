@@ -52,13 +52,47 @@ defmodule TestLLM do
     end
   end
 
+  defp interpret("I want 2 litres of milk, eggs, baking soda kiwi and mangoes") do
+    items =
+      [%{name: "milk", quantity: "2", unit: "litre"}] ++
+        Enum.map(
+          ["eggs", "baking soda", "kiwi", "mangoes"],
+          &%{name: &1, quantity: nil, unit: nil}
+        )
+
+    tool_call(:capture_intent, %{
+      action: "add_items",
+      items: items,
+      name: nil,
+      quantity: nil,
+      unit: nil
+    })
+  end
+
   defp interpret(text) do
     case text |> String.downcase() |> String.split(~r/[^a-z0-9.]+/, trim: true) do
-      ["add" | rest] -> capture_add(rest)
-      ["remove" | rest] -> capture_remove(rest)
-      ["clear" | _] -> tool_call(:capture_intent, %{action: "clear_list"})
-      ["compare" | _] -> tool_call(:capture_intent, %{action: "compare"})
-      _other -> {:reply, "I can't help with that."}
+      ["add" | rest] ->
+        capture_add(rest)
+
+      [quantity | _] = words when is_map_key(@number_words, quantity) ->
+        capture_add(words)
+
+      ["remove" | rest] ->
+        capture_remove(rest)
+
+      ["clear" | _] ->
+        tool_call(:capture_intent, %{action: "clear_list"})
+
+      ["compare" | _] ->
+        tool_call(:capture_intent, %{action: "compare"})
+
+      [quantity | _] = words ->
+        if Regex.match?(~r/^\d+(\.\d+)?$/, quantity),
+          do: capture_add(words),
+          else: {:reply, "I can't help with that."}
+
+      _other ->
+        {:reply, "I can't help with that."}
     end
   end
 

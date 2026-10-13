@@ -22,36 +22,70 @@ defmodule DealAgent.Agents.ShoppingAgent do
       |> Keyword.get_lazy(:llm, &default_llm/0)
       |> normalize_llm()
 
-    with {:ok, run} <- run_agent(input, llm),
+    result = interpret_with_llm(input, llm)
+
+    case result do
+      {:error, {:openai_request_failed, %Req.TransportError{}}} ->
+        case DealAgent.Shopping.CommandParser.parse(input) do
+          {:ok, intent} -> {:ok, intent}
+          _ -> result
+        end
+
+      _ ->
+        result
+    end
+  end
+
+  defp interpret_with_llm(input, llm) do
+    with :ok <- validate_llm(llm),
+         {:ok, run} <- run_agent(input, llm),
          {:ok, payload} <- extract_payload(run),
-         {:ok, intent} <-
-           IntentConverter.convert(
-             payload,
-             input
-           ) do
+         {:ok, intent} <- IntentConverter.convert(payload, input) do
       {:ok, intent}
+    else
+      {:error, %BeamAgent.Run{error: error}} when not is_nil(error) -> {:error, error}
+      other -> other
     end
   end
 
   defp run_agent(input, llm) do
-    BeamAgent.API.run(
-      input,
-      llm: llm,
-      tools: DealAgent.Tools.Registry.tools(),
-      verification: [
-        required_tools: [:capture_intent]
-      ],
-      guardrails: [
-        max_iterations: 3,
-        max_tool_calls: 1,
-        max_execution_time_ms: 100_000
-      ]
-    )
+    reference = make_ref()
+
+    result =
+      BeamAgent.API.run(
+        input,
+        llm:
+          {DealAgent.LLM.CheckedClient, [client: llm, recipient: self(), reference: reference]},
+        tools: DealAgent.Tools.Registry.tools(),
+        verification: [
+          required_tools: [:capture_intent]
+        ],
+        guardrails: [
+          max_iterations: 3,
+          max_tool_calls: 1,
+          max_execution_time_ms: 100_000
+        ]
+      )
+
+    receive do
+      {:shopping_llm_error, ^reference, reason} -> {:error, reason}
+    after
+      0 -> result
+    end
   end
 
   # `:llm` may be given as `{module, opts}` or a bare `module`.
   defp normalize_llm({module, opts}) when is_atom(module) and is_list(opts), do: {module, opts}
   defp normalize_llm(module) when is_atom(module), do: {module, []}
+
+  defp validate_llm({DealAgent.LLM.OpenAI, opts}) do
+    case Keyword.get(opts, :api_key) do
+      key when is_binary(key) and byte_size(key) > 0 -> :ok
+      _ -> {:error, :missing_openai_api_key}
+    end
+  end
+
+  defp validate_llm(_llm), do: :ok
 
   defp default_llm do
     Application.get_env(:deal_agent, :shopping_agent_llm) || openai_llm()

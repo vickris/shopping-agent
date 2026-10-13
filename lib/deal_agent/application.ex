@@ -8,6 +8,10 @@ defmodule DealAgent.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {DealAgent.Supermarkets.SearchQueue, :carrefour},
+      {DealAgent.Supermarkets.SearchQueue, :quickmart},
+      {DealAgent.Supermarkets.SearchQueue, :naivas},
+      {DealAgent.Checkout.CartJobs, []},
       DealAgentWeb.Telemetry,
       DealAgent.Repo,
       {DNSCluster, query: Application.get_env(:deal_agent, :dns_cluster_query) || :ignore},

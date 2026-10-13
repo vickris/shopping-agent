@@ -14,7 +14,7 @@ defmodule DealAgent.Tools.CaptureIntent do
     Records the user's shopping intent.
 
     Supported actions:
-    add_item, remove_item, clear_list, compare.
+    add_items, add_item, remove_item, clear_list, compare.
     """
   end
 
@@ -25,11 +25,28 @@ defmodule DealAgent.Tools.CaptureIntent do
         action: %{
           type: "string",
           enum: [
+            "add_items",
             "add_item",
             "remove_item",
             "clear_list",
             "compare"
           ]
+        },
+        items: %{
+          type: ["array", "null"],
+          items: %{
+            type: "object",
+            properties: %{
+              name: %{type: "string"},
+              quantity: %{type: ["string", "null"]},
+              unit: %{
+                type: ["string", "null"],
+                enum: ["each", "gram", "kilogram", "millilitre", "litre", nil]
+              }
+            },
+            required: ["name", "quantity", "unit"],
+            additionalProperties: false
+          }
         },
         name: %{
           type: ["string", "null"]
@@ -50,6 +67,7 @@ defmodule DealAgent.Tools.CaptureIntent do
         }
       },
       required: [
+        "items",
         "action",
         "name",
         "quantity",
@@ -71,6 +89,7 @@ defmodule DealAgent.Tools.CaptureIntent do
   defp normalize(args) do
     %{
       action: get(args, :action),
+      items: get(args, :items),
       name: get(args, :name),
       quantity: get(args, :quantity),
       unit: get(args, :unit)

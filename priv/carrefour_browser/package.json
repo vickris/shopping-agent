@@ -1,0 +1,11 @@
+{
+  "name": "deal-agent-carrefour-browser",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install-browser": "playwright install chromium firefox"
+  },
+  "dependencies": {
+    "playwright": "1.64.0"
+  }
+}

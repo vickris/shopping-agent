@@ -2,8 +2,8 @@ defmodule DealAgent.Supermarkets.Carrefour do
   @moduledoc """
   Carrefour supermarket adapter.
 
-  The first version uses fixture data so the adapter boundary can be
-  developed independently of live HTTP behaviour.
+  Uses the headless browser scraper by default, with an injectable client
+  for tests. Unknown pack sizes are preserved as nil rather than guessed.
   """
 
   @behaviour DealAgent.Supermarkets.Behaviour
@@ -20,11 +20,14 @@ defmodule DealAgent.Supermarkets.Carrefour do
       Keyword.get(
         opts,
         :client,
-        __MODULE__.Client
+        if(Keyword.has_key?(opts, :request_options),
+          do: __MODULE__.Client,
+          else: __MODULE__.BrowserClient
+        )
       )
 
     with {:ok, raw_products} <-
-           client.search(item.name),
+           search_client(client, item.name, opts),
          {:ok, products} <-
            normalize_products(raw_products) do
       {:ok,
@@ -39,6 +42,22 @@ defmodule DealAgent.Supermarkets.Carrefour do
        }}
     end
   end
+
+  defp search_client(__MODULE__.Client, query, opts) do
+    __MODULE__.Client.search(
+      query,
+      Keyword.take(opts, [:request_options, :browser_fallback, :browser_client])
+    )
+  end
+
+  defp search_client(__MODULE__.BrowserClient, query, opts),
+    do: __MODULE__.BrowserClient.search(query, opts)
+
+  defp search_client(client, query, _opts), do: client.search(query)
+
+  defp decimal(nil), do: nil
+  defp decimal(%Decimal{} = value), do: value
+  defp decimal(value), do: Decimal.new(value)
 
   defp normalize_products(raw_products) do
     products =
@@ -55,9 +74,9 @@ defmodule DealAgent.Supermarkets.Carrefour do
       id: to_string(raw.id),
       name: raw.name,
       brand: raw.brand,
-      price: Decimal.new(raw.price),
+      price: decimal(raw.price),
       currency: :KES,
-      quantity: Decimal.new(raw.quantity),
+      quantity: decimal(raw.quantity),
       unit: raw.unit,
       supermarket: name(),
       url: raw.url,

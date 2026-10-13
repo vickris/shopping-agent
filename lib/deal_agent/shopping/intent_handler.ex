@@ -12,6 +12,13 @@ defmodule DealAgent.Shopping.IntentHandler do
           | {:error, ShoppingList.t(), String.t()}
 
   @spec handle(Intent.t(), ShoppingList.t()) :: result()
+  def handle(%Intent{action: :add_items, items: items}, shopping_list) do
+    updated = Enum.reduce(items, shopping_list, &ShoppingList.add_item(&2, &1))
+
+    {:ok, updated,
+     "Added #{length(items)} items to your shopping list: #{Enum.map_join(items, ", ", & &1.name)}."}
+  end
+
   def handle(
         %Intent{
           action: :add_item,

@@ -20,6 +20,7 @@ import "phoenix_html"
 // Establish Phoenix Socket and LiveView configuration.
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
+import {Notyf} from "notyf"
 import topbar from "../vendor/topbar"
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -42,3 +43,11 @@ liveSocket.connect()
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
 
+
+const cartAlerts = new Notyf({duration: 0, dismissible: true, position: {x: "right", y: "top"}})
+window.addEventListener("phx:cart-notification", ({detail}) => {
+  // Notyf renders HTML; encode messages before handing them to the library.
+  const text = document.createElement("span")
+  text.textContent = detail.message
+  cartAlerts.open({type: detail.type === "success" ? "success" : "error", message: text.innerHTML})
+})

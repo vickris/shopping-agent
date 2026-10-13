@@ -11,6 +11,9 @@ defmodule DealAgent.Shopping.IntentConverter do
           | {:error, term()}
   def convert(payload, raw_input) do
     case fetch(payload, :action) do
+      "add_items" ->
+        convert_add_items(payload, raw_input)
+
       "add_item" ->
         convert_add_item(payload, raw_input)
 
@@ -31,6 +34,29 @@ defmodule DealAgent.Shopping.IntentConverter do
     end
   end
 
+  defp convert_add_items(payload, raw_input) do
+    case fetch(payload, :items) do
+      items when is_list(items) and length(items) in 1..30 ->
+        Enum.reduce_while(items, {:ok, []}, fn
+          payload, {:ok, acc} when is_map(payload) ->
+            case convert_add_item(payload, raw_input) do
+              {:ok, intent} -> {:cont, {:ok, [intent.item | acc]}}
+              error -> {:halt, error}
+            end
+
+          _, _ ->
+            {:halt, {:error, :invalid_items}}
+        end)
+        |> case do
+          {:ok, items} -> {:ok, Intent.add_items(Enum.reverse(items), raw_input)}
+          error -> error
+        end
+
+      _ ->
+        {:error, :invalid_items}
+    end
+  end
+
   defp convert_add_item(payload, raw_input) do
     with {:ok, name} <- require_string(payload, :name),
          {:ok, quantity} <- parse_quantity(fetch(payload, :quantity)),
@@ -39,6 +65,7 @@ defmodule DealAgent.Shopping.IntentConverter do
         Item.new(
           name,
           quantity: quantity,
+          quantity_unspecified: is_nil(fetch(payload, :quantity)),
           unit: unit
         )
 

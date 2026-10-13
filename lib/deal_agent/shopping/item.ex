@@ -10,7 +10,8 @@ defmodule DealAgent.Shopping.Item do
     :name,
     :quantity,
     :unit,
-    :notes
+    :notes,
+    quantity_unspecified: false
   ]
 
   @type unit ::
@@ -25,6 +26,7 @@ defmodule DealAgent.Shopping.Item do
           name: String.t(),
           quantity: Decimal.t(),
           unit: unit(),
+          quantity_unspecified: boolean(),
           notes: String.t() | nil
         }
 
@@ -45,6 +47,8 @@ defmodule DealAgent.Shopping.Item do
       name: normalize_name(name),
       quantity: normalize_quantity(Keyword.get(opts, :quantity, 1)),
       unit: Keyword.get(opts, :unit, :each),
+      quantity_unspecified:
+        Keyword.get(opts, :quantity_unspecified, not Keyword.has_key?(opts, :quantity)),
       notes: Keyword.get(opts, :notes)
     }
   end

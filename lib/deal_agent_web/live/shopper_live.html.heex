@@ -1,80 +1,36 @@
-<div class="mx-auto max-w-3xl p-8">
-  <section>
-    <h1 class="text-3xl font-bold">
-      Deal Agent
-    </h1>
+<div class="deal-workspace">
+  <section class="workspace-intro">
+    <p class="eyebrow">YOUR SHOPPING WORKSPACE</p>
+    <h1 class="text-3xl font-bold">A better basket starts here.</h1>
 
     <p class="mt-2 text-gray-600">
-      Build your shopping list before comparing supermarkets.
+      Build your list in chat. Compare live supermarket prices. Pick the products that work for you.
     </p>
 
-    <div class="mt-8">
-      <.form
-        for={@item_form}
-        phx-submit="add-item"
-        class="mt-8 grid gap-3 md:grid-cols-[1fr_120px_160px_auto]"
-        id="shopping-item-form"
-      >
-        <.input
-          field={@item_form[:item_name]}
-          placeholder="Milk"
-          autocomplete="off"
-        />
-
-        <.input
-          field={@item_form[:quantity]}
-          type="number"
-          min="0.01"
-          step="0.01"
-        />
-
-        <.input
-          field={@item_form[:unit]}
-          type="select"
-          options={@units}
-        />
-
-        <button
-          type="submit"
-          class="rounded bg-black px-4 py-2 text-white"
-        >
-          Add
-        </button>
-      </.form>
-    </div>
-
-    <div class="mt-8">
+    <div class="shopping-list-panel">
       <h2 class="text-xl font-semibold">
-        Shopping List
+        Your list
       </h2>
 
       <%= if ShoppingList.empty?(@shopping_list) do %>
         <p class="mt-4 text-gray-500">
-          Your shopping list is empty.
+          Your list will appear here as you add items in chat.
         </p>
       <% else %>
-        <ul class="mt-4 space-y-2">
+        <ul class="shopping-list-chips">
           <%= for item <- @shopping_list.items do %>
-            <li
-              id={"shopping-item-#{item.id}"}
-              class="flex items-center justify-between rounded border p-3"
-            >
+            <li id={"shopping-item-#{item.id}"} class="shopping-chip">
               <div>
                 <p class="font-medium">
                   {item.name}
                 </p>
 
                 <p class="text-sm text-gray-500">
-                  {Decimal.to_string(item.quantity, :normal)}
-                  {format_unit(item.unit)}
+                  {request_amount(item)}
                 </p>
               </div>
 
-              <button
-                phx-click="remove-item"
-                phx-value-id={item.id}
-                class="text-sm text-red-600"
-              >
+              <button phx-click="remove-item" phx-value-id={item.id} class="text-sm text-red-600">
                 Remove
               </button>
             </li>
@@ -83,79 +39,394 @@
       <% end %>
     </div>
   </section>
-  <section class="flex min-h-[600px] flex-col rounded-xl border">
-    <div class="border-b p-4">
-      <h2 class="text-xl font-semibold">
-        Shopper Assistant
-      </h2>
+  <div class="shopping-workbench">
+    <section class="assistant-panel" aria-labelledby="assistant-heading">
+      <div class="border-b p-4">
+        <p class="eyebrow">LET’S BUILD YOUR LIST</p>
+        <h2 id="assistant-heading" class="text-xl font-semibold">
+          Shopping assistant
+        </h2>
 
-      <p class="text-sm text-gray-500">
-        Ask questions or manage your shopping list.
-      </p>
-    </div>
-
-    <div
-      id="chat-messages"
-      class="flex-1 space-y-4 overflow-y-auto p-4"
-    >
-      <%= if @messages == [] do %>
         <p class="text-sm text-gray-500">
-          Start by asking me something about your shopping.
+          Add one item or write your whole list. We’ll search all three supermarkets.
         </p>
-      <% end %>
+      </div>
 
-      <%= for message <- @messages do %>
+      <div id="chat-messages" class="chat-history flex-1 space-y-4 overflow-y-auto p-4">
+        <%= if @messages == [] do %>
+          <div class="chat-welcome">
+            <div class="welcome-icon" aria-hidden="true">
+              <.icon name="hero-shopping-bag" class="h-7 w-7" />
+            </div>
+            <h3>What’s on your list?</h3>
+            <p>
+              Tell me what you need, with quantities if you know them. You can include several items in one message.
+            </p>
+            <div class="example-request">Try: “2 litres of milk”</div>
+          </div>
+        <% end %>
+
+        <%= for message <- @messages do %>
+          <div
+            id={"message-#{message.id}"}
+            class={[
+              "max-w-[80%] rounded-xl px-4 py-3",
+              message.role == :user &&
+                "ml-auto bg-gray-900 text-white",
+              message.role == :assistant &&
+                "mr-auto bg-gray-100 text-gray-900"
+            ]}
+          >
+            {message.content}
+          </div>
+        <% end %>
+
         <div
-          id={"message-#{message.id}"}
-          class={[
-            "max-w-[80%] rounded-xl px-4 py-3",
-            message.role == :user &&
-              "ml-auto bg-gray-900 text-white",
-            message.role == :assistant &&
-              "mr-auto bg-gray-100 text-gray-900"
-          ]}
+          :if={@agent_status == :thinking}
+          id="agent-thinking"
+          class="mr-auto max-w-[80%] rounded-xl bg-gray-100 px-4 py-3 text-gray-500"
         >
-          {message.content}
+          Looking at your request...
         </div>
-      <% end %>
+      </div>
 
-      <div
-        :if={@agent_status == :thinking}
-        id="agent-thinking"
-        class="mr-auto max-w-[80%] rounded-xl bg-gray-100 px-4 py-3 text-gray-500"
+      <.form
+        for={@chat_form}
+        phx-submit="send-message"
+        class="chat-form border-t p-4"
+        id="chat-form"
       >
-        Looking at your request...
-      </div>
+        <div class="chat-compose flex gap-2">
+          <.input
+            field={@chat_form[:message]}
+            placeholder="e.g. 2 litres of milk"
+            aria-label="Shopping request"
+            disabled={@agent_status == :thinking}
+            autocomplete="off"
+          />
+
+          <button
+            type="submit"
+            disabled={@agent_status == :thinking}
+            class={[
+              "rounded px-4 py-2 text-white",
+              @agent_status == :thinking &&
+                "cursor-not-allowed bg-gray-400",
+              @agent_status != :thinking &&
+                "bg-black"
+            ]}
+          >
+            Send
+          </button>
+        </div>
+      </.form>
+    </section>
+    <div class="comparison-workspace">
+      <section :if={ShoppingList.empty?(@shopping_list)} class="comparison-empty">
+        <div class="empty-store-labels">
+          <span>Carrefour</span><span>Quickmart</span><span>Naivas</span>
+        </div>
+        <div class="empty-illustration" aria-hidden="true">
+          <.icon name="hero-squares-2x2" class="h-10 w-10" />
+        </div>
+        <p class="eyebrow">THREE STORES. ONE CLEAR VIEW.</p>
+        <h2>Your next shop, side by side.</h2>
+        <p>
+          Add your first item in chat to see available products, choose your favourites, and build a total for each supermarket.
+        </p>
+        <div class="empty-steps">
+          <span><b>01</b> Tell us your list</span><span><b>02</b> Pick your products</span><span><b>03</b> Compare totals</span>
+        </div>
+      </section>
+
+      <section
+        :if={!ShoppingList.empty?(@shopping_list)}
+        class="comparison-panel"
+        aria-labelledby="carrefour-heading"
+      >
+        <h2 id="carrefour-heading" class="text-xl font-semibold">Compare your basket</h2>
+        <p class="mt-2 text-sm text-gray-600">
+          Select a product to fulfil each request. Whole packs are rounded up to cover the requested amount; you can adjust the pack count.
+          Carrefour uses its default delivery area. Quickmart prices and availability are for the Ruaka branch. Naivas uses its default Nairobi delivery area.
+        </p>
+        <div class="comparison-scroll">
+          <table id="supermarket-results" class="comparison-table w-full text-left">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="w-1/5 px-4 py-3 font-semibold">Shopping item</th>
+                <th
+                  :for={store <- @stores}
+                  scope="col"
+                  class={"store-heading store-#{store.id} px-4 py-3 font-semibold"}
+                >
+                  <span class="store-dot" aria-hidden="true"></span>{store.label}<span
+                    :if={store.id == "quickmart"}
+                    class="block text-xs font-normal text-gray-500"
+                  >Ruaka</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              <tr :for={item <- @shopping_list.items} id={"carrefour-row-#{item.id}"}>
+                <th scope="row" class="px-4 py-4 align-top font-normal">
+                  <p class="font-medium">{item.name}</p>
+                  <p class="mt-1 text-sm text-gray-500">
+                    Requested: {request_amount(item)}
+                  </p>
+                </th>
+                <td
+                  :for={store <- @stores}
+                  id={"#{store.id}-cell-#{item.id}"}
+                  class="store-cell min-w-[220px] px-4 py-4 align-top"
+                  aria-live="polite"
+                >
+                  <% selections = assigns[store.selections_key] %>
+                  <% results = assigns[store.results_key] %>
+                  <div
+                    :if={selection = selections[item.id]}
+                    id={"#{store.id}-selection-#{item.id}"}
+                    class={"#{store.id}-selection mb-4 rounded-lg bg-blue-600 p-4 text-white"}
+                  >
+                    <p class="text-xs font-semibold uppercase tracking-wide">
+                      Selected for {item.name}
+                    </p>
+                    <p :if={item.quantity_unspecified} class="mt-1 text-sm">
+                      Quantity unspecified · starts at 1 pack; adjust below.
+                    </p>
+                    <p
+                      :if={is_nil(selection.product.quantity) or is_nil(selection.product.unit)}
+                      class="mt-1 text-sm"
+                    >
+                      Pack size unknown · check and adjust the pack count below.
+                    </p>
+                    <p class="mt-1 font-semibold">{selection.product.name}</p>
+                    <p class="mt-1 text-sm">
+                      {format_product_size(selection.product)} per pack · {format_price(
+                        selection.product.price
+                      )}
+                    </p>
+                    <p class="mt-2 font-semibold">
+                      {selection.packs} packs · Row cost: {format_price(selection.cost)}
+                    </p>
+                    <form phx-submit="update-packs" class="mt-3 flex flex-wrap items-center gap-2">
+                      <input type="hidden" name="item_id" value={item.id} /><input
+                        type="hidden"
+                        name="store"
+                        value={store.id}
+                      />
+                      <label for={"#{store.id}-packs-#{item.id}"} class="text-sm">Packs</label>
+                      <input
+                        id={"#{store.id}-packs-#{item.id}"}
+                        name="packs"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={selection.packs}
+                        class="w-20 rounded text-gray-900"
+                      />
+                      <button class="rounded border border-blue-200 px-2 py-1 text-sm">
+                        Update
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="clear-selection"
+                        phx-value-id={item.id}
+                        phx-value-store={store.id}
+                        class="text-sm underline"
+                      >
+                        Clear selection
+                      </button>
+                    </form>
+                  </div>
+                  <%= case Map.get(results, item.id) do %>
+                    <% :loading -> %>
+                      <p class={"#{store.id}-loading text-sm text-gray-500"} role="status">
+                        Searching {store.label}... (queued if the store is busy)
+                      </p>
+                    <% {:ok, %{products: []}} -> %>
+                      <p class={"#{store.id}-empty text-sm text-gray-600"}>
+                        No products returned for this search.
+                      </p>
+                    <% {:ok, result} -> %>
+                      <% filter_query = Map.get(@candidate_filters, {store.id, item.id}, "") %>
+                      <% visible_products = filtered_products(result.products, filter_query) %>
+                      <form
+                        phx-change="filter-products"
+                        phx-submit="filter-products"
+                        class="candidate-filter mb-3"
+                        id={"#{store.id}-filter-#{item.id}"}
+                      >
+                        <input type="hidden" name="store" value={store.id} />
+                        <input type="hidden" name="item_id" value={item.id} />
+                        <label for={"#{store.id}-filter-input-#{item.id}"} class="sr-only">
+                          Filter {store.label} results for {item.name}
+                        </label>
+                        <input
+                          type="search"
+                          id={"#{store.id}-filter-input-#{item.id}"}
+                          name="query"
+                          value={filter_query}
+                          placeholder="Search these results…"
+                          autocomplete="off"
+                          phx-debounce="150"
+                          maxlength="200"
+                        />
+                      </form>
+                      <p class="mb-3 text-xs text-gray-500">
+                        {length(visible_products)} of {length(result.products)} search candidates · price per pack
+                      </p>
+                      <p
+                        :if={visible_products == []}
+                        class="candidate-filter-empty mb-3 text-sm text-gray-500"
+                        role="status"
+                      >
+                        No matching products. Try another name or clear the search.
+                      </p>
+                      <ul class="candidate-list max-h-72 space-y-3 overflow-y-auto pr-2">
+                        <li
+                          :for={product <- visible_products}
+                          class={[
+                            "#{store.id}-product rounded border p-3",
+                            selections[item.id] && selections[item.id].product.id == product.id &&
+                              "border-blue-500 bg-blue-50"
+                          ]}
+                        >
+                          <a
+                            href={product.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="product-name font-medium"
+                          >
+                            {product.name}
+                          </a>
+                          <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                            <span class="font-semibold">{format_price(product.price)}</span>
+                            <span class="text-gray-600">{format_product_size(product)}</span>
+                            <span class={
+                              if product.in_stock, do: "text-green-700", else: "text-gray-500"
+                            }>
+                              {if product.in_stock, do: "In stock", else: "Unavailable"}
+                            </span>
+                          </div>
+                          <button
+                            phx-click="select-product"
+                            phx-value-item-id={item.id}
+                            phx-value-product-id={product.id}
+                            phx-value-store={store.id}
+                            disabled={!selectable?(item, product)}
+                            aria-pressed={
+                              if selections[item.id] &&
+                                   selections[item.id].product.id == product.id,
+                                 do: "true",
+                                 else: "false"
+                            }
+                            class="mt-2 rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white disabled:bg-gray-200 disabled:text-gray-500"
+                          >
+                            {if selections[item.id] &&
+                                  selections[item.id].product.id == product.id,
+                                do: "Selected",
+                                else: "Select product"}
+                          </button>
+                          <p :if={!selectable?(item, product)} class="mt-1 text-xs text-gray-500">
+                            Selection needs an available product with a compatible pack size.
+                          </p>
+                        </li>
+                      </ul>
+                    <% {:error, reason} -> %>
+                      <p class={"#{store.id}-error text-sm text-red-700"} role="alert">
+                        {search_error_message(reason, store)}
+                      </p>
+                      <a
+                        href={store_search_url(store, item.name)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="mt-2 inline-block text-sm font-medium text-blue-700 underline"
+                      >
+                        View {item.name} on {store.label}
+                      </a>
+                    <% nil -> %>
+                      <p class="text-sm text-gray-500">Search not started.</p>
+                  <% end %>
+                  <button
+                    phx-click="retry-search"
+                    phx-value-store={store.id}
+                    phx-value-id={item.id}
+                    disabled={Map.get(results, item.id) == :loading}
+                    class="mt-3 text-sm font-medium text-blue-700 underline disabled:text-gray-400"
+                  >
+                    Search again
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot class="border-t bg-blue-50">
+              <tr>
+                <th scope="row" class="px-4 py-4">Store totals</th>
+                <td :for={store <- @stores} id={"#{store.id}-total"} class="px-4 py-4 align-top">
+                  <% total = Selection.total(@shopping_list.items, assigns[store.selections_key]) %>
+                  <p class="text-sm">
+                    {if total.unresolved == 0, do: "Total", else: "Selected subtotal"}
+                  </p>
+                  <p class="store-total-value font-bold text-blue-900">
+                    {format_price(total.cost)}
+                  </p>
+                  <p :if={total.unresolved > 0} class="mt-1 text-sm text-gray-600">
+                    Incomplete · {total.unresolved} item(s) still need a selection
+                  </p>
+                  <%= if store.id == "carrefour" do %>
+                    <% cart_job = @cart_jobs[store.id] %>
+                    <button
+                      phx-click="shop-now"
+                      phx-value-store={store.id}
+                      class="shop-now"
+                      disabled={total.unresolved > 0 or (cart_job && cart_job.status != "closed")}
+                    >
+                      Shop now
+                    </button>
+                    <p class="mt-2 text-xs text-gray-500">
+                      Opens a Carrefour cart window. You review and pay there.
+                    </p>
+                    <div
+                      :if={cart_job}
+                      id="carrefour-cart-status"
+                      class="cart-status"
+                      aria-live="polite"
+                    >
+                      <p class="font-semibold">
+                        {case cart_job.status do
+                          "preparing" -> "Preparing your cart"
+                          "ready" -> "Cart ready · review and pay"
+                          "needs_attention" -> "Cart filled · action needed"
+                          "closed" -> "Cart window closed"
+                          _ -> "Cart needs review"
+                        end}
+                      </p>
+                      <p>{cart_job.message}</p>
+                      <p>
+                        Prepared basket estimate: KES {cart_job.estimated_total}. Later list edits are not included.
+                      </p>
+                      <button
+                        :if={cart_job.status != "closed"}
+                        phx-click="cart-window"
+                        phx-value-action="open"
+                      >
+                        Show Carrefour window
+                      </button>
+                      <button
+                        :if={cart_job.status != "closed"}
+                        phx-click="cart-window"
+                        phx-value-action="close"
+                      >
+                        Close cart window
+                      </button>
+                    </div>
+                  <% end %>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
     </div>
-
-    <.form
-      for={@chat_form}
-      phx-submit="send-message"
-      class="border-t p-4"
-      id="chat-form"
-    >
-      <div class="flex gap-2">
-        <.input
-          field={@chat_form[:message]}
-          placeholder="Ask your shopper..."
-          disabled={@agent_status == :thinking}
-          autocomplete="off"
-        />
-
-        <button
-          type="submit"
-          disabled={@agent_status == :thinking}
-          class={[
-            "rounded px-4 py-2 text-white",
-            @agent_status == :thinking &&
-              "cursor-not-allowed bg-gray-400",
-            @agent_status != :thinking &&
-              "bg-black"
-          ]}
-        >
-          Send
-        </button>
-      </div>
-    </.form>
-  </section>
+  </div>
 </div>

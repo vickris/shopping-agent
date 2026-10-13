@@ -9,7 +9,7 @@ defmodule DealAgent.Supermarkets.Carrefour.MockClient do
          price: "189.00",
          quantity: "1",
          unit: :litre,
-         url: "https://example.test/milk-1",
+         url: "https://www.carrefour.ke/mafken/en/milk/p/milk-1",
          image_url: nil,
          in_stock: true
        },
@@ -20,11 +20,18 @@ defmodule DealAgent.Supermarkets.Carrefour.MockClient do
          price: "99.00",
          quantity: "500",
          unit: :millilitre,
-         url: "https://example.test/milk-500",
+         url: "https://www.carrefour.ke/mafken/en/milk/p/milk-500",
          image_url: nil,
          in_stock: true
        }
      ]}
+  end
+
+  def search("unreadable"), do: {:error, :unexpected_search_response}
+
+  def search("slow milk") do
+    Process.sleep(100)
+    search("milk")
   end
 
   def search(_query) do

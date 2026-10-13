@@ -1,6 +1,9 @@
 defmodule DealAgent.Shopping.Product do
   @moduledoc """
   Normalized product representation returned by supermarket adapters.
+
+  Price is the selling price of one listed pack. Quantity is total pack
+  contents in `unit`; both quantity and unit are nil when the size is unknown.
   """
 
   @enforce_keys [
@@ -41,8 +44,8 @@ defmodule DealAgent.Shopping.Product do
           brand: String.t() | nil,
           price: Decimal.t(),
           currency: atom(),
-          quantity: Decimal.t(),
-          unit: unit(),
+          quantity: Decimal.t() | nil,
+          unit: unit() | nil,
           supermarket: atom(),
           url: String.t() | nil,
           image_url: String.t() | nil,
