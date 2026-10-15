@@ -373,54 +373,63 @@
                   <p :if={total.unresolved > 0} class="mt-1 text-sm text-gray-600">
                     Incomplete · {total.unresolved} item(s) still need a selection
                   </p>
-                  <%= if store.id == "carrefour" do %>
-                    <% cart_job = @cart_jobs[store.id] %>
-                    <button
-                      phx-click="shop-now"
-                      phx-value-store={store.id}
-                      class="shop-now"
-                      disabled={total.unresolved > 0 or (cart_job && cart_job.status != "closed")}
-                    >
-                      Shop now
-                    </button>
-                    <p class="mt-2 text-xs text-gray-500">
-                      Opens a Carrefour cart window. You review and pay there.
+                  <% cart_job = @cart_jobs[store.id] %>
+                  <button
+                    phx-click="shop-now"
+                    phx-value-store={store.id}
+                    class="shop-now"
+                    disabled={total.unresolved > 0 or (cart_job && cart_job.status != "closed")}
+                  >
+                    Shop now
+                  </button>
+                  <p class="mt-2 text-xs text-gray-500">
+                    Opens a {store.label} cart window. You review and pay there.
+                  </p>
+                  <div
+                    :if={cart_job}
+                    id={"#{store.id}-cart-status"}
+                    class="cart-status"
+                    aria-live="polite"
+                  >
+                    <p class="font-semibold">
+                      {case cart_job.status do
+                        "preparing" -> "Preparing your cart"
+                        "awaiting_input" -> "Your input is needed"
+                        "ready" -> "Cart ready · review and pay"
+                        "needs_attention" -> "Cart filled · action needed"
+                        "closed" -> "Cart window closed"
+                        _ -> "Cart needs review"
+                      end}
                     </p>
-                    <div
-                      :if={cart_job}
-                      id="carrefour-cart-status"
-                      class="cart-status"
-                      aria-live="polite"
+                    <p>{cart_job.message}</p>
+                    <button
+                      :if={cart_job.status == "awaiting_input"}
+                      phx-click="cart-window"
+                      phx-value-action="resume"
+                      phx-value-store={store.id}
                     >
-                      <p class="font-semibold">
-                        {case cart_job.status do
-                          "preparing" -> "Preparing your cart"
-                          "ready" -> "Cart ready · review and pay"
-                          "needs_attention" -> "Cart filled · action needed"
-                          "closed" -> "Cart window closed"
-                          _ -> "Cart needs review"
-                        end}
-                      </p>
-                      <p>{cart_job.message}</p>
-                      <p>
-                        Prepared basket estimate: KES {cart_job.estimated_total}. Later list edits are not included.
-                      </p>
-                      <button
-                        :if={cart_job.status != "closed"}
-                        phx-click="cart-window"
-                        phx-value-action="open"
-                      >
-                        Show Carrefour window
-                      </button>
-                      <button
-                        :if={cart_job.status != "closed"}
-                        phx-click="cart-window"
-                        phx-value-action="close"
-                      >
-                        Close cart window
-                      </button>
-                    </div>
-                  <% end %>
+                      Continue after completing the store prompt
+                    </button>
+                    <p>
+                      Prepared basket estimate: KES {cart_job.estimated_total}. Later list edits are not included.
+                    </p>
+                    <button
+                      :if={cart_job.status != "closed"}
+                      phx-click="cart-window"
+                      phx-value-action="open"
+                      phx-value-store={store.id}
+                    >
+                      Show {store.label} window
+                    </button>
+                    <button
+                      :if={cart_job.status != "closed"}
+                      phx-click="cart-window"
+                      phx-value-action="close"
+                      phx-value-store={store.id}
+                    >
+                      Close cart window
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tfoot>

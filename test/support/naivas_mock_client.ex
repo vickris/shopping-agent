@@ -14,7 +14,7 @@ defmodule DealAgent.Supermarkets.Naivas.MockClient do
          price: Decimal.new("70.00"),
          quantity: Decimal.new(500),
          unit: :millilitre,
-         url: "https://example.test/naivas-milk",
+         url: "https://www.naivas.online/naivas-milk",
          image_url: nil,
          in_stock: true
        }

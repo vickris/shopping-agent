@@ -9,14 +9,16 @@ defmodule DealAgent.Checkout.CartJobs do
     GenServer.call(__MODULE__, {:start, owner, plan})
   end
 
-  def command(owner, id, action) when action in ["open", "close"],
+  def command(owner, id, action) when action in ["open", "close", "resume"],
     do: GenServer.call(__MODULE__, {:command, owner, id, action})
 
   def init(state), do: {:ok, state}
 
   def handle_call({:start, owner, plan}, _, jobs) do
     cond do
-      Enum.any?(jobs, fn {_, job} -> job.owner == owner end) ->
+      Enum.any?(jobs, fn {_, job} ->
+        job.owner == owner and job.store == Map.get(plan, :store, "carrefour")
+      end) ->
         {:reply, {:error, :cart_already_open}, jobs}
 
       map_size(jobs) >= 3 ->
@@ -29,13 +31,16 @@ defmodule DealAgent.Checkout.CartJobs do
           {:ok, port} ->
             id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
             Port.command(port, Jason.encode!(plan) <> "\n")
-            timeout = Process.send_after(self(), {:timeout, id}, 240_000)
+            generation = make_ref()
+            timeout = Process.send_after(self(), {:timeout, id, generation}, 240_000)
             expiry = Process.send_after(self(), {:expiry, id}, 1_800_000)
 
             job = %{
               port: port,
               owner: owner,
+              store: Map.get(plan, :store, "carrefour"),
               status: "preparing",
+              generation: generation,
               timeout: timeout,
               expiry: expiry
             }
@@ -50,6 +55,9 @@ defmodule DealAgent.Checkout.CartJobs do
 
   def handle_call({:command, owner, id, action}, _, jobs) do
     case jobs[id] do
+      %{owner: ^owner, status: status} when action == "resume" and status != "awaiting_input" ->
+        {:reply, {:error, :not_paused}, jobs}
+
       %{owner: ^owner, port: port} ->
         result =
           try do
@@ -57,6 +65,22 @@ defmodule DealAgent.Checkout.CartJobs do
             :ok
           rescue
             ArgumentError -> {:error, :unknown_cart}
+          end
+
+        jobs =
+          if result == :ok and action == "resume" and jobs[id].status == "awaiting_input" do
+            job = jobs[id]
+            Process.cancel_timer(job.timeout)
+            generation = make_ref()
+
+            Map.put(jobs, id, %{
+              job
+              | status: "preparing",
+                generation: generation,
+                timeout: Process.send_after(self(), {:timeout, id, generation}, 240_000)
+            })
+          else
+            jobs
           end
 
         {:reply, result, jobs}
@@ -69,11 +93,14 @@ defmodule DealAgent.Checkout.CartJobs do
   def handle_info({port, {:data, {:eol, line}}}, jobs) do
     with {id, job} <- Enum.find(jobs, fn {_, job} -> job.port == port end),
          {:ok, %{"status" => status} = event} <- Jason.decode(line),
-         true <- status in ["preparing" | @terminal] do
+         true <- status in ["preparing", "awaiting_input" | @terminal] do
       # A terminal result cannot be overwritten by delayed preparation messages.
       if job.status not in @terminal or status == "closed" do
         send(job.owner, {:cart_event, id, event})
-        if status in @terminal, do: Process.cancel_timer(job.timeout)
+
+        if status in @terminal or status == "awaiting_input",
+          do: Process.cancel_timer(job.timeout)
+
         {:noreply, Map.put(jobs, id, %{job | status: status})}
       else
         {:noreply, jobs}
@@ -86,7 +113,7 @@ defmodule DealAgent.Checkout.CartJobs do
   def handle_info({port, {:exit_status, _}}, jobs) do
     case Enum.find(jobs, fn {_, job} -> job.port == port end) do
       {id, job} ->
-        status = if job.status == "preparing", do: "failed", else: "closed"
+        status = if job.status in ["preparing", "awaiting_input"], do: "failed", else: "closed"
 
         send(
           job.owner,
@@ -96,7 +123,7 @@ defmodule DealAgent.Checkout.CartJobs do
              "message" =>
                if(status == "failed",
                  do: "The cart browser stopped before verification.",
-                 else: "The Carrefour cart window was closed."
+                 else: "The #{String.capitalize(job.store)} cart window was closed."
                )
            }}
         )
@@ -107,6 +134,13 @@ defmodule DealAgent.Checkout.CartJobs do
 
       _ ->
         {:noreply, jobs}
+    end
+  end
+
+  def handle_info({:timeout, id, generation}, jobs) do
+    case jobs[id] do
+      %{generation: ^generation} -> handle_info({:timeout, id}, jobs)
+      _ -> {:noreply, jobs}
     end
   end
 

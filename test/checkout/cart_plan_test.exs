@@ -31,11 +31,31 @@ defmodule DealAgent.Checkout.CartPlanTest do
     assert plan.estimated_total == "186"
   end
 
+  test "accepts store-specific selections and rejects cross-store baskets" do
+    item = Item.new("milk")
+
+    for {store, url} <- [
+          {:quickmart, "https://www.quickmart.co.ke/milk-66"},
+          {:naivas, "https://www.naivas.online/milk"}
+        ] do
+      selected = selection(item)
+      selected = %{selected | product: %{selected.product | supermarket: store, url: url}}
+
+      assert {:ok, %{store: name, products: [%{query: "milk"}]}} =
+               CartPlan.build([item], %{item.id => selected}, store)
+
+      assert name == Atom.to_string(store)
+
+      assert {:error, :invalid_selection} =
+               CartPlan.build([item], %{item.id => selected}, :carrefour)
+    end
+  end
+
   test "blocks incomplete, unsupported and external product URLs" do
     item = Item.new("milk")
     assert {:error, :empty_basket} = CartPlan.build([], %{}, :carrefour)
     assert {:error, :incomplete_basket} = CartPlan.build([item], %{}, :carrefour)
-    assert {:error, :unsupported_store} = CartPlan.build([item], %{}, :naivas)
+    assert {:error, :unsupported_store} = CartPlan.build([item], %{}, :unknown)
     selected = selection(item)
     bad_price = %{selected | product: %{selected.product | price: nil}}
 

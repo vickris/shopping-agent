@@ -1,14 +1,14 @@
-# Carrefour cart preparation
+# Supermarket cart preparation
 
-Shop now is enabled only after every shopping-list row has a Carrefour selection.
-CartPlan freezes those choices, validates Carrefour URLs, and combines repeated
+Shop now is enabled only after every shopping-list row has a selection for that store.
+CartPlan freezes those choices, validates store-specific URLs, and combines repeated
 SKUs into an exact whole-pack quantity. Each product is capped at 50 packs.
 
-CartJobs owns a separate Playwright Firefox process, with a fresh guest session.
+CartJobs owns a separate Playwright browser process (Firefox for Carrefour/Naivas, Chromium for Quickmart), with a fresh guest session.
 The cart browser is visible on the local Phoenix server's desktop so the user can
 continue in the same session. This initial implementation requires a desktop;
 it is not a remote/headless-server checkout integration. A generic cart link in
-another browser would lose this guest session, so Show Carrefour window brings
+another browser would lose this guest session, so Show store window brings
 forward the existing browser instead.
 
 The runner opens each exact selected SKU page, checks its current selling price,
@@ -25,7 +25,7 @@ quantity acknowledgement or connection failure stops preparation and shows a
 failure message; a partial cart stays open for manual review. No automatic add
 retry or replacement is attempted.
 
-There is one open cart per LiveView process and at most three local cart browsers.
+There is one open cart per store per LiveView process and at most three local cart browsers.
 Preparation has a four-minute deadline; browser sessions expire after 30 minutes.
 Closing the cart window frees the slot. Browser cookies remain only in the temporary
 browser context and are not exposed to the app, persisted, or transferred. OpenAI
@@ -36,5 +36,18 @@ currently session-local and reset on reload. Later edits to the list or pack cou
 do not change a cart already being prepared: close it and prepare a new snapshot.
 
 Setup: run `npm ci --prefix assets` for Notyf, install the existing Playwright
-Firefox runtime, then `mix assets.build`. External email/SMS notifications and
-Quickmart/Naivas cart preparation are not part of this first increment.
+Firefox and Chromium runtimes, then `mix assets.build`. Alerts are in-app only.
+
+Quickmart uses the same Ruaka branch (store 1) as search. Before adding products,
+it pauses for the user to enter their delivery location in the store window.
+Continue resumes the same guest session and rechecks the location; repeated clicks
+cannot replay basket additions. The four-minute preparation timer pauses while
+waiting for input; the 30-minute session expiry still applies. Missing products,
+changed prices or an unexpected branch stop the run without substitution.
+
+Naivas fills a guest cart and verifies the saved SKU counts and line totals after
+reloading the cart. Its Login to Proceed step remains for the user. Quickmart and
+Naivas emit a verified cart-filled alert with a reminder to review delivery, sign
+in if required and pay in the existing browser window. Neither runner enters
+credentials or submits checkout. Store changes can require selector updates;
+unverified/partial carts are reported as failures.

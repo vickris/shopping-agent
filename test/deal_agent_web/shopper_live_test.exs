@@ -313,10 +313,20 @@ defmodule DealAgentWeb.ShopperLiveTest do
     {:ok, view, _} = live(conn, "/")
     add_item(view, "milk")
     render_async(view, 1000)
-    assert has_element?(view, "button[phx-click='shop-now'][disabled]")
+
+    assert has_element?(
+             view,
+             "button[phx-click='shop-now'][phx-value-store='carrefour'][disabled]"
+           )
+
     view |> element("[phx-value-product-id='milk-1']") |> render_click()
-    refute has_element?(view, "button[phx-click='shop-now'][disabled]")
-    view |> element("button[phx-click='shop-now']") |> render_click()
+
+    refute has_element?(
+             view,
+             "button[phx-click='shop-now'][phx-value-store='carrefour'][disabled]"
+           )
+
+    view |> element("button[phx-click='shop-now'][phx-value-store='carrefour']") |> render_click()
 
     assert_push_event(
       view,
@@ -331,6 +341,42 @@ defmodule DealAgentWeb.ShopperLiveTest do
 
     assert has_element?(view, "#carrefour-cart-status", "Cart ready")
     view |> element("button[phx-value-action='close']") |> render_click()
+  end
+
+  test "Quickmart pauses for delivery input and continues its own cart", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+    add_item(view, "milk")
+    render_async(view, 1000)
+    view |> element("[phx-value-product-id='quick-milk']") |> render_click()
+    view |> element("button[phx-click='shop-now'][phx-value-store='quickmart']") |> render_click()
+
+    assert_push_event(
+      view,
+      "cart-notification",
+      %{message: "Enter your Quickmart delivery location, then continue."},
+      3000
+    )
+
+    assert has_element?(view, "#quickmart-cart-status", "Your input is needed")
+    refute has_element?(view, "#carrefour-cart-status")
+
+    view
+    |> element("button[phx-value-action='resume'][phx-value-store='quickmart']")
+    |> render_click()
+
+    assert_push_event(
+      view,
+      "cart-notification",
+      %{type: "success", message: "Your Quickmart cart is filled and verified."},
+      3000
+    )
+
+    assert has_element?(view, "#quickmart-cart-status", "Cart filled")
+    refute has_element?(view, "button[phx-value-action='resume']")
+
+    view
+    |> element("button[phx-value-action='close'][phx-value-store='quickmart']")
+    |> render_click()
   end
 
   defp add_item(view, name) do

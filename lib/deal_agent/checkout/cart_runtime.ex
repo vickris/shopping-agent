@@ -1,5 +1,5 @@
 defmodule DealAgent.Checkout.CartRuntime do
-  @moduledoc "Owns the isolated Carrefour browser process; credentials never enter its environment."
+  @moduledoc "Owns the isolated store browser process; credentials never enter its environment."
   def start do
     with node when is_binary(node) <- System.find_executable("node") do
       script = Application.app_dir(:deal_agent, "priv/carrefour_browser/cart.mjs")

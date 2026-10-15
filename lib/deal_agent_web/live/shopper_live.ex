@@ -59,50 +59,77 @@ defmodule DealAgentWeb.ShopperLive do
   end
 
   @impl true
-  def handle_event("shop-now", %{"store" => "carrefour"}, socket) do
-    current = socket.assigns.cart_jobs["carrefour"]
+  def handle_event("shop-now", %{"store" => store_id} = params, socket) do
+    case store_for(params) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Unknown supermarket.")}
 
-    if current && current.status != "closed" do
-      {:noreply,
-       put_flash(
-         socket,
-         :error,
-         "Close the existing Carrefour cart window before preparing another basket."
-       )}
-    else
-      with {:ok, plan} <-
-             CartPlan.build(
-               socket.assigns.shopping_list.items,
-               socket.assigns.carrefour_selections,
-               :carrefour
-             ),
-           {:ok, id} <- CartJobs.start(self(), plan) do
-        job = %{
-          id: id,
-          status: "preparing",
-          message: "Opening Carrefour and preparing your selected basket…",
-          estimated_total: plan.estimated_total
-        }
+      store ->
+        current = socket.assigns.cart_jobs[store_id]
 
-        {:noreply,
-         assign(socket, :cart_jobs, Map.put(socket.assigns.cart_jobs, "carrefour", job))}
-      else
-        {:error, reason} -> {:noreply, put_flash(socket, :error, cart_error_message(reason))}
-      end
+        if current && current.status != "closed" do
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "Close the existing #{store.label} cart window before preparing another basket."
+           )}
+        else
+          with {:ok, plan} <-
+                 CartPlan.build(
+                   socket.assigns.shopping_list.items,
+                   socket.assigns[store.selections_key],
+                   store.adapter.name()
+                 ),
+               {:ok, id} <- CartJobs.start(self(), plan) do
+            job = %{
+              id: id,
+              status: "preparing",
+              message: "Opening #{store.label} and preparing your selected basket…",
+              estimated_total: plan.estimated_total
+            }
+
+            {:noreply,
+             assign(socket, :cart_jobs, Map.put(socket.assigns.cart_jobs, store_id, job))}
+          else
+            {:error, reason} ->
+              {:noreply,
+               put_flash(
+                 socket,
+                 :error,
+                 String.replace(cart_error_message(reason), "Carrefour", store.label)
+               )}
+          end
+        end
     end
   end
 
-  def handle_event("shop-now", _, socket),
-    do:
-      {:noreply, put_flash(socket, :error, "Cart preparation is available for Carrefour first.")}
+  def handle_event("cart-window", %{"action" => action} = params, socket)
+      when action in ["open", "close", "resume"] do
+    store_id = Map.get(params, "store", "carrefour")
 
-  def handle_event("cart-window", %{"action" => action}, socket)
-      when action in ["open", "close"] do
-    case socket.assigns.cart_jobs["carrefour"] do
+    case socket.assigns.cart_jobs[store_id] do
       %{id: id} ->
         case CartJobs.command(self(), id, action) do
-          :ok -> {:noreply, socket}
-          _ -> {:noreply, put_flash(socket, :error, "This cart window is no longer available.")}
+          :ok ->
+            socket =
+              if action == "resume",
+                do:
+                  assign(
+                    socket,
+                    :cart_jobs,
+                    Map.update!(
+                      socket.assigns.cart_jobs,
+                      store_id,
+                      &%{&1 | status: "preparing", message: "Continuing cart preparation."}
+                    )
+                  ),
+                else: socket
+
+            {:noreply, socket}
+
+          _ ->
+            {:noreply, put_flash(socket, :error, "This cart window is no longer available.")}
         end
 
       _ ->
@@ -457,11 +484,11 @@ defmodule DealAgentWeb.ShopperLive do
 
   @impl true
   def handle_info({:cart_event, id, event}, socket) do
-    case socket.assigns.cart_jobs["carrefour"] do
-      %{id: ^id} = job ->
+    case Enum.find(socket.assigns.cart_jobs, fn {_, job} -> job.id == id end) do
+      {store_id, job} ->
         status = event["status"]
 
-        if status == "ready" and event["verified"] != true do
+        if status in ["ready", "needs_attention"] and event["verified"] != true do
           handle_info(
             {:cart_event, id,
              %{"status" => "failed", "message" => "The cart could not be verified."}},
@@ -471,13 +498,13 @@ defmodule DealAgentWeb.ShopperLive do
           updated = %{job | status: status, message: event["message"]}
 
           socket =
-            assign(socket, :cart_jobs, Map.put(socket.assigns.cart_jobs, "carrefour", updated))
+            assign(socket, :cart_jobs, Map.put(socket.assigns.cart_jobs, store_id, updated))
 
           socket =
-            if status in ["ready", "needs_attention", "failed"],
+            if status in ["ready", "needs_attention", "awaiting_input", "failed"],
               do:
                 push_event(socket, "cart-notification", %{
-                  type: if(status == "ready", do: "success", else: "error"),
+                  type: if(status in ["ready", "needs_attention"], do: "success", else: "error"),
                   message: event["message"]
                 }),
               else: socket

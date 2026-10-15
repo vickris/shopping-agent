@@ -14,7 +14,7 @@ defmodule DealAgent.Supermarkets.Quickmart.MockClient do
          price: Decimal.new("65.00"),
          quantity: Decimal.new(500),
          unit: :millilitre,
-         url: "https://example.test/quick-milk",
+         url: "https://www.quickmart.co.ke/quick-milk",
          image_url: nil,
          in_stock: true
        }
