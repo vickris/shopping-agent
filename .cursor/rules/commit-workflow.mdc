@@ -1,0 +1,6 @@
+---
+description: Commit completed and verified project changes automatically
+alwaysApply: true
+---
+
+Follow the commit workflow in the repository root AGENTS.md: automatically commit coherent, verified changes locally, exclude unrelated changes and secrets, and report the commit hash. Push only when requested.
