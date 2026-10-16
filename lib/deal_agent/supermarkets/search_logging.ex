@@ -10,7 +10,10 @@ defmodule DealAgent.Supermarkets.SearchLogging do
     :browser_http_error,
     :browser_search_failed,
     :unexpected_search_response,
-    :invalid_query
+    :invalid_query,
+    :location_unconfirmed,
+    :location_changed,
+    :session_busy
   ]
 
   def event(name, job, extra \\ []) do

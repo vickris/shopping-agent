@@ -12,6 +12,7 @@ defmodule DealAgent.Application do
       {DealAgent.Supermarkets.SearchQueue, :quickmart},
       {DealAgent.Supermarkets.SearchQueue, :naivas},
       {DealAgent.Checkout.CartJobs, []},
+      {DealAgent.Delivery.Sessions, []},
       DealAgentWeb.Telemetry,
       DealAgent.Repo,
       {DNSCluster, query: Application.get_env(:deal_agent, :dns_cluster_query) || :ignore},

@@ -19,6 +19,21 @@ defmodule DealAgent.Supermarkets.BrowserClient do
   end
 
   defp fetch(query, store, opts) do
+    case Keyword.get(opts, :delivery_session) do
+      {owner, session_id} ->
+        with {:ok, html} <-
+               DealAgent.Delivery.Sessions.search(owner, session_id, Atom.to_string(store), query) do
+          decode(Jason.encode!(%{html: html}), 0, store)
+        end
+
+      nil ->
+        if Application.get_env(:deal_agent, :require_delivery_location, true),
+          do: {:error, :location_unconfirmed},
+          else: fetch_default(query, store, opts)
+    end
+  end
+
+  defp fetch_default(query, store, opts) do
     node = Keyword.get(opts, :node_executable, System.find_executable("node"))
     runner = Keyword.get(opts, :runner, &System.cmd/3)
     script = Application.app_dir(:deal_agent, "priv/carrefour_browser/search.mjs")

@@ -86,3 +86,24 @@ Shop now can prepare a partial basket: select at least one product in a store's
 column. Unselected rows are skipped and remain visible in the comparison. The
 cart runner does not require sign-in before adding products; store-imposed login
 or delivery requirements at checkout still apply.
+
+## Confirmed delivery locations
+
+Before searching, enter an area (for example, Syokimau) in each store's delivery
+card and choose **Set delivery location**. Select the delivery location on the
+supermarket website; for Quickmart, also open the chosen branch. Return to the
+app and click **I confirmed delivery in the store** once the store accepts it.
+The card displays the location reported by the website.
+
+Searches and cart preparation reuse that store's temporary browser context,
+including its location and Quickmart branch. Cookies remain in memory in the
+browser process and are not exported. Unconfirmed stores are not searched.
+Closing or changing the location clears that store's results and selections;
+a detected location change stops the operation rather than searching a default
+area. Once a cart is prepared, the window is reserved for reviewing that basket.
+
+This flow currently needs the local desktop store window. Sessions end when the
+shopping page disconnects, the store window closes, or after 30 minutes. Reconfirm
+the location after reopening the shopping page. The store's visible location
+label may be broader than the selected area; final address, delivery availability,
+fees and payment remain subject to the supermarket's checkout checks.

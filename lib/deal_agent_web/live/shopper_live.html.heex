@@ -39,6 +39,85 @@
       <% end %>
     </div>
   </section>
+  <section
+    class="mb-6 rounded-xl border border-gray-200 bg-white p-4"
+    aria-labelledby="delivery-heading"
+  >
+    <h2 id="delivery-heading" class="text-lg font-semibold">Your delivery locations</h2>
+    <p class="mt-1 text-sm text-gray-600">
+      Confirm delivery with each supermarket first. Searches and Shop now use that same store window. Final address and delivery availability are checked by the supermarket.
+    </p>
+    <div class="mt-4 grid gap-4 md:grid-cols-3">
+      <div
+        :for={store <- @stores}
+        id={"#{store.id}-delivery"}
+        class="rounded-lg border border-gray-200 p-3"
+      >
+        <h3 class="font-semibold">{store.label}</h3>
+        <% profile = @delivery_sessions[store.id] %>
+        <%= if profile do %>
+          <p class="mt-1 text-sm font-medium">
+            {profile.area} · {if profile.status == "confirmed",
+              do: "Location confirmed",
+              else: "Confirmation needed"}
+          </p>
+          <p class="mt-1 text-xs text-gray-600">{profile.message}</p>
+          <p :if={profile.label} class="mt-1 text-xs text-gray-500">
+            Store location: {profile.label}
+          </p>
+          <button
+            :if={profile.status == "awaiting_input"}
+            phx-click="delivery-window"
+            phx-value-action="confirm"
+            phx-value-store={store.id}
+            class="mt-2 rounded bg-blue-600 px-3 py-2 text-sm text-white"
+          >
+            I confirmed delivery in the store
+          </button>
+          <button
+            phx-click="delivery-window"
+            phx-value-action="open"
+            phx-value-store={store.id}
+            class="mt-2 text-sm text-blue-700 underline"
+          >
+            Show store window
+          </button>
+          <button
+            phx-click="delivery-window"
+            phx-value-action="close"
+            phx-value-store={store.id}
+            class="ml-2 mt-2 text-sm text-gray-600 underline"
+          >
+            Close / change location
+          </button>
+        <% else %>
+          <p class="mt-1 text-sm text-gray-500">Delivery not confirmed</p>
+          <form id={"#{store.id}-delivery-form"} phx-submit="setup-delivery" class="mt-2">
+            <input type="hidden" name="store" value={store.id} />
+            <label for={"#{store.id}-delivery-area"} class="sr-only">
+              Delivery area for {store.label}
+            </label>
+            <input
+              id={"#{store.id}-delivery-area"}
+              name="area"
+              type="text"
+              placeholder="Area, e.g. Syokimau"
+              maxlength="200"
+              required
+              class="w-full rounded border-gray-300 text-sm"
+            />
+            <button
+              type="submit"
+              phx-disable-with="Opening…"
+              class="mt-2 rounded border border-blue-200 px-3 py-2 text-sm text-blue-700"
+            >
+              Set delivery location
+            </button>
+          </form>
+        <% end %>
+      </div>
+    </div>
+  </section>
   <div class="shopping-workbench">
     <section class="assistant-panel" aria-labelledby="assistant-heading">
       <div class="border-b p-4">
@@ -48,7 +127,7 @@
         </h2>
 
         <p class="text-sm text-gray-500">
-          Add one item or write your whole list. We’ll search all three supermarkets.
+          Add one item or write your whole list. We’ll search the supermarkets whose delivery locations you have confirmed.
         </p>
       </div>
 
@@ -147,7 +226,7 @@
         <h2 id="carrefour-heading" class="text-xl font-semibold">Compare your basket</h2>
         <p class="mt-2 text-sm text-gray-600">
           Select a product to fulfil each request. Whole packs are rounded up to cover the requested amount; you can adjust the pack count.
-          Carrefour uses its default delivery area. Quickmart prices and availability are for the Ruaka branch. Naivas uses its default Nairobi delivery area.
+          Searches use each store’s confirmed delivery session. Close or change a location to clear its old prices and selections.
         </p>
         <div class="comparison-scroll">
           <table id="supermarket-results" class="comparison-table w-full text-left">
@@ -159,10 +238,7 @@
                   scope="col"
                   class={"store-heading store-#{store.id} px-4 py-3 font-semibold"}
                 >
-                  <span class="store-dot" aria-hidden="true"></span>{store.label}<span
-                    :if={store.id == "quickmart"}
-                    class="block text-xs font-normal text-gray-500"
-                  >Ruaka</span>
+                  <span class="store-dot" aria-hidden="true"></span>{store.label}<span class="block text-xs font-normal text-gray-500">{if @delivery_sessions[store.id], do: @delivery_sessions[store.id].area, else: "Delivery not confirmed"}</span>
                 </th>
               </tr>
             </thead>

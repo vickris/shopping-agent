@@ -9,7 +9,8 @@ export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
     throw new Error('cart_mismatch');
   };
   if (plan.store === 'quickmart') {
-    await navigate('https://www.quickmart.co.ke/shops/products/1/keyword-milk');
+    const branch = plan.delivery?.branch_id || '1';
+    await navigate('https://www.quickmart.co.ke/shops/products/'+branch+'/keyword-milk');
     const locationSet = async () => {
       const text = await page.locator('.js-location-address').first().innerText();
       return text.trim() && !/enter your delivery address/i.test(text);
@@ -18,10 +19,10 @@ export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
       if (!await page.locator('#location_fld').isVisible()) await page.locator('.locationButtonJs').first().click();
       await pause('Enter your delivery location in the Quickmart window, choose the Ruaka store, then click Continue here.');
     }
-    if (!await page.locator('a[href="/ruaka"]').count()) throw new Error('wrong_branch');
+    if (!plan.delivery && !await page.locator('a[href="/ruaka"]').count()) throw new Error('wrong_branch');
     for (const p of plan.products) {
       emit({status:'preparing', message:`Adding ${p.name} to Quickmart.`});
-      await navigate('https://www.quickmart.co.ke/shops/products/1/keyword-' + encodeURIComponent(p.query));
+      await navigate('https://www.quickmart.co.ke/shops/products/'+branch+'/keyword-' + encodeURIComponent(p.query));
       const card = page.locator('#products-listing .productInfoJs').filter({has:page.locator(`input.qty-input[data-key="${p.id}"]`)});
       if (await card.count() !== 1) throw new Error('cart_mismatch');
       const href = await card.locator('a.products-title').getAttribute('href');

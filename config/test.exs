@@ -45,3 +45,7 @@ config :phoenix_live_view,
 config :deal_agent, :naivas_search_options, client: DealAgent.Supermarkets.Naivas.MockClient
 
 config :deal_agent, :cart_runtime, DealAgent.Checkout.TestRuntime
+
+# Legacy offline fixtures do not open delivery browsers.
+config :deal_agent, :require_delivery_location, false
+config :deal_agent, :delivery_runtime, DealAgent.Delivery.TestRuntime

@@ -2,6 +2,7 @@ defmodule DealAgentWeb.ShopperLive do
   use DealAgentWeb, :live_view
 
   alias DealAgent.Checkout.{CartPlan, CartJobs}
+  alias DealAgent.Delivery.Sessions, as: DeliverySessions
   alias DealAgent.Agents.ShoppingAgent
   alias DealAgent.Chat.Message
   alias DealAgent.Shopping.IntentHandler
@@ -45,6 +46,7 @@ defmodule DealAgentWeb.ShopperLive do
      |> assign(:cart_jobs, %{})
      |> assign(:candidate_filters, %{})
      |> assign(:store_queries, %{})
+     |> assign(:delivery_sessions, %{})
      |> assign(:units, Item.units())
      |> assign(:messages, [])
      |> assign(:agent_status, :idle)
@@ -57,6 +59,52 @@ defmodule DealAgentWeb.ShopperLive do
      |> assign(:carrefour_results, %{})
      |> assign_item_form()
      |> assign_chat_form()}
+  end
+
+  def handle_event("setup-delivery", %{"store" => store_id, "area" => area} = params, socket) do
+    with store when not is_nil(store) <- store_for(params),
+         true <- is_binary(area) and String.trim(area) != "" and String.length(area) <= 200,
+         false <- not is_nil(socket.assigns.delivery_sessions[store_id]),
+         {:ok, id} <- DeliverySessions.start(self(), store_id, area) do
+      socket = invalidate_store(socket, store)
+
+      profile = %{
+        id: id,
+        status: "opening",
+        area: String.trim(area),
+        label: nil,
+        message: "Opening the store’s delivery selector…"
+      }
+
+      {:noreply,
+       assign(
+         socket,
+         :delivery_sessions,
+         Map.put(socket.assigns.delivery_sessions, store_id, profile)
+       )}
+    else
+      _ ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Close the existing store session, then enter a delivery area of 1–200 characters."
+         )}
+    end
+  end
+
+  def handle_event("delivery-window", %{"store" => store_id, "action" => action}, socket)
+      when action in ["open", "close", "confirm"] do
+    case socket.assigns.delivery_sessions[store_id] do
+      %{id: id} ->
+        case DeliverySessions.command(self(), id, action) do
+          :ok -> {:noreply, socket}
+          _ -> {:noreply, put_flash(socket, :error, "This store session is busy or closed.")}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -82,7 +130,7 @@ defmodule DealAgentWeb.ShopperLive do
                    socket.assigns[store.selections_key],
                    store.adapter.name()
                  ),
-               {:ok, id} <- CartJobs.start(self(), plan) do
+               {:ok, id} <- start_cart(socket, store, plan) do
             job = %{
               id: id,
               status: "preparing",
@@ -112,7 +160,7 @@ defmodule DealAgentWeb.ShopperLive do
 
     case socket.assigns.cart_jobs[store_id] do
       %{id: id} ->
-        case CartJobs.command(self(), id, action) do
+        case cart_command(socket, store_id, id, action) do
           :ok ->
             socket =
               if action == "resume",
@@ -207,7 +255,12 @@ defmodule DealAgentWeb.ShopperLive do
          Map.put(
            socket.assigns[store.selections_key],
            item_id,
-           Map.put(selection, :search_query, result.query)
+           selection
+           |> Map.put(:search_query, result.query)
+           |> Map.put(
+             :delivery_session_id,
+             get_in(socket.assigns.delivery_sessions, [store.id, :id])
+           )
          )
        )}
     else
@@ -384,6 +437,23 @@ defmodule DealAgentWeb.ShopperLive do
     {:noreply, apply_shopping_intent(socket, intent)}
   end
 
+  def handle_async({:search_store, store_id, item_id, session_id}, {:ok, result}, socket) do
+    if get_in(socket.assigns.delivery_sessions, [store_id, :id]) == session_id and
+         get_in(socket.assigns.delivery_sessions, [store_id, :status]) == "confirmed" do
+      {:noreply, put_search_result(socket, store_id, item_id, result)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_async({:search_store, store_id, item_id, session_id}, {:exit, _}, socket) do
+    if get_in(socket.assigns.delivery_sessions, [store_id, :id]) == session_id do
+      {:noreply, put_search_result(socket, store_id, item_id, {:error, :location_unconfirmed})}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_async({:search_store, store_id, item_id}, {:ok, result}, socket) do
     {:noreply, put_search_result(socket, store_id, item_id, result)}
   end
@@ -514,6 +584,74 @@ defmodule DealAgentWeb.ShopperLive do
   end
 
   @impl true
+  def handle_info({:delivery_event, id, event}, socket) do
+    case Enum.find(socket.assigns.delivery_sessions, fn {_, profile} -> profile.id == id end) do
+      {store_id, profile} ->
+        store = store_for(%{"store" => store_id})
+
+        case event do
+          %{"type" => "confirmed", "location" => location} ->
+            socket = invalidate_store(socket, store)
+
+            updated =
+              %{
+                profile
+                | status: "confirmed",
+                  label: location["label"],
+                  message: "Using the delivery location you confirmed in the store window."
+              }
+              |> Map.put(:branch_id, location["branch_id"])
+              |> Map.put(:branch, location["branch"])
+
+            socket =
+              assign(
+                socket,
+                :delivery_sessions,
+                Map.put(socket.assigns.delivery_sessions, store_id, updated)
+              )
+
+            {:noreply,
+             Enum.reduce(socket.assigns.shopping_list.items, socket, &search_store(&2, &1, store))}
+
+          %{"type" => type} when type in ["closed", "invalidated"] ->
+            socket = invalidate_store(socket, store)
+
+            profiles =
+              if type == "closed",
+                do: Map.delete(socket.assigns.delivery_sessions, store_id),
+                else:
+                  Map.put(socket.assigns.delivery_sessions, store_id, %{
+                    profile
+                    | status: "awaiting_input",
+                      message:
+                        "Delivery location changed. Check the store window and confirm again."
+                  })
+
+            {:noreply, assign(socket, :delivery_sessions, profiles)}
+
+          %{"type" => "setup_error", "message" => message} ->
+            {:noreply, put_flash(socket, :error, message)}
+
+          %{"message" => message} ->
+            updated = %{profile | status: "awaiting_input", message: message}
+
+            {:noreply,
+             assign(
+               socket,
+               :delivery_sessions,
+               Map.put(socket.assigns.delivery_sessions, store_id, updated)
+             )}
+
+          _ ->
+            {:noreply, socket}
+        end
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_info({:cart_event, id, event}, socket) do
     case Enum.find(socket.assigns.cart_jobs, fn {_, job} -> job.id == id end) do
       {store_id, job} ->
@@ -547,6 +685,13 @@ defmodule DealAgentWeb.ShopperLive do
         {:noreply, socket}
     end
   end
+
+  defp cart_error_message(:session_busy),
+    do:
+      "Wait for this store’s searches to finish, or close its existing cart before preparing another."
+
+  defp cart_error_message(:location_unconfirmed),
+    do: "Confirm this store’s delivery location and search again before shopping."
 
   defp cart_error_message(:incomplete_basket),
     do: "Select a product for every Carrefour row before shopping."
@@ -592,21 +737,112 @@ defmodule DealAgentWeb.ShopperLive do
     query = query || Map.get(socket.assigns.store_queries, {store.id, item.id}, item.name)
     search_item = %{item | name: query}
     options = Application.get_env(:deal_agent, store.options_key, [])
+    profile = socket.assigns.delivery_sessions[store.id]
 
-    socket
-    |> assign(:store_queries, Map.put(socket.assigns.store_queries, {store.id, item.id}, query))
-    |> assign(
-      :candidate_filters,
-      Map.delete(socket.assigns.candidate_filters, {store.id, item.id})
-    )
-    |> assign(store.selections_key, Map.delete(socket.assigns[store.selections_key], item.id))
-    |> assign(store.results_key, Map.put(socket.assigns[store.results_key], item.id, :loading))
-    |> start_async({:search_store, store.id, item.id}, fn ->
-      case store.adapter.search(search_item, options) do
-        {:ok, result} -> {:ok, %{result | requested_item: item}}
-        other -> other
-      end
-    end)
+    socket =
+      socket
+      |> assign(:store_queries, Map.put(socket.assigns.store_queries, {store.id, item.id}, query))
+      |> assign(
+        :candidate_filters,
+        Map.delete(socket.assigns.candidate_filters, {store.id, item.id})
+      )
+      |> assign(store.selections_key, Map.delete(socket.assigns[store.selections_key], item.id))
+
+    if (is_nil(profile) or profile.status != "confirmed") and
+         Application.get_env(:deal_agent, :require_delivery_location, true) do
+      assign(
+        socket,
+        store.results_key,
+        Map.put(socket.assigns[store.results_key], item.id, {:error, :location_unconfirmed})
+      )
+    else
+      options =
+        if profile && profile.status == "confirmed",
+          do:
+            options
+            |> Keyword.put(:client, Module.concat(store.adapter, BrowserClient))
+            |> Keyword.put(:delivery_session, {self(), profile.id}),
+          else: options
+
+      task =
+        if profile,
+          do: {:search_store, store.id, item.id, profile.id},
+          else: {:search_store, store.id, item.id}
+
+      socket
+      |> assign(store.results_key, Map.put(socket.assigns[store.results_key], item.id, :loading))
+      |> start_async(task, fn ->
+        case store.adapter.search(search_item, options) do
+          {:ok, result} ->
+            metadata =
+              if profile,
+                do:
+                  Map.merge(result.metadata || %{}, %{
+                    delivery_session_id: profile.id,
+                    delivery_area: profile.area,
+                    delivery_label: profile.label,
+                    branch_id: Map.get(profile, :branch_id),
+                    branch: Map.get(profile, :branch),
+                    delivery_confirmation: :user_confirmed
+                  }),
+                else: result.metadata
+
+            {:ok, %{result | requested_item: item, metadata: metadata}}
+
+          other ->
+            other
+        end
+      end)
+    end
+  end
+
+  defp invalidate_store(socket, store) do
+    socket =
+      Enum.reduce(socket.assigns.shopping_list.items, socket, fn item, acc ->
+        acc = cancel_async(acc, {:search_store, store.id, item.id})
+
+        case socket.assigns.delivery_sessions[store.id] do
+          %{id: id} -> cancel_async(acc, {:search_store, store.id, item.id, id})
+          _ -> acc
+        end
+      end)
+
+    socket |> assign(store.results_key, %{}) |> assign(store.selections_key, %{})
+  end
+
+  defp start_cart(socket, store, plan) do
+    case socket.assigns.delivery_sessions[store.id] do
+      %{id: id, status: "confirmed"} ->
+        selected =
+          for item <- socket.assigns.shopping_list.items,
+              selection = socket.assigns[store.selections_key][item.id],
+              do: selection
+
+        if Enum.all?(selected, &(Map.get(&1, :delivery_session_id) == id)) do
+          case DeliverySessions.cart(
+                 self(),
+                 id,
+                 store.id,
+                 Map.put(plan, :delivery_session_id, id)
+               ) do
+            :ok -> {:ok, id}
+            error -> error
+          end
+        else
+          {:error, :location_unconfirmed}
+        end
+
+      _ ->
+        if Application.get_env(:deal_agent, :require_delivery_location, true),
+          do: {:error, :location_unconfirmed},
+          else: CartJobs.start(self(), plan)
+    end
+  end
+
+  defp cart_command(socket, store_id, id, action) do
+    if get_in(socket.assigns.delivery_sessions, [store_id, :id]) == id,
+      do: DeliverySessions.command(self(), id, action),
+      else: CartJobs.command(self(), id, action)
   end
 
   defp search_all_items(socket) do
@@ -651,7 +887,12 @@ defmodule DealAgentWeb.ShopperLive do
 
       acc =
         Enum.reduce(removed_ids, acc, fn id, current ->
-          cancel_async(current, {:search_store, store.id, id})
+          current = cancel_async(current, {:search_store, store.id, id})
+
+          case socket.assigns.delivery_sessions[store.id] do
+            %{id: session_id} -> cancel_async(current, {:search_store, store.id, id, session_id})
+            _ -> current
+          end
         end)
 
       acc
@@ -659,6 +900,13 @@ defmodule DealAgentWeb.ShopperLive do
       |> assign(store.selections_key, Map.take(acc.assigns[store.selections_key], item_ids))
     end)
   end
+
+  defp search_error_message(reason, _) when reason in [:location_unconfirmed, :location_changed],
+    do:
+      "Confirm this store’s delivery location above before searching. Default-area results are not used."
+
+  defp search_error_message(:session_busy, _),
+    do: "This store window is busy with another search or cart. Try again after it finishes."
 
   defp search_error_message({:quickmart_http_error, 429}, store),
     do: "#{store.label} is receiving too many requests. Please try again later."
