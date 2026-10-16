@@ -57,9 +57,16 @@
         <% profile = @delivery_sessions[store.id] %>
         <%= if profile do %>
           <p class="mt-1 text-sm font-medium">
-            {profile.area} · {if profile.status == "confirmed",
-              do: "Location confirmed",
-              else: "Confirmation needed"}
+            {profile.area} · {cond do
+              profile.status != "confirmed" ->
+                "Confirmation needed"
+
+              Map.get(profile, :confirmation) == "user_override" ->
+                "Area supplied · delivery unverified"
+
+              true ->
+                "Location confirmed"
+            end}
           </p>
           <p role="status" aria-live="polite" class="mt-1 text-xs text-gray-600">
             {profile.message}
@@ -76,9 +83,11 @@
             phx-disable-with="Checking location…"
             class="mt-2 rounded bg-blue-600 px-3 py-2 text-sm text-white"
           >
-            {if profile.status == "confirming",
-              do: "Checking location…",
-              else: "I confirmed delivery in the store"}
+            {cond do
+              profile.status == "confirming" -> "Checking location…"
+              store.id == "naivas" -> "Use this area for Naivas"
+              true -> "I confirmed delivery in the store"
+            end}
           </button>
           <button
             phx-click="delivery-window"

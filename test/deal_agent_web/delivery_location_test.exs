@@ -92,7 +92,13 @@ defmodule DealAgentWeb.DeliveryLocationTest do
       refute has_element?(view, selector <> "[disabled]")
       refute has_element?(view, "##{store}-delivery", "Location confirmed")
       view |> element(selector) |> render_click()
-      wait_until(fn -> has_element?(view, "##{store}-delivery", "Location confirmed") end)
+
+      expected =
+        if store == "naivas",
+          do: "Area supplied · delivery unverified",
+          else: "Location confirmed"
+
+      wait_until(fn -> has_element?(view, "##{store}-delivery", expected) end)
     end
   end
 

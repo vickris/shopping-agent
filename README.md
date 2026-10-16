@@ -116,3 +116,11 @@ reopened after updating the browser scripts.
 Browser location regression tests use local HTML fixtures (no store requests):
 `node --test priv/carrefour_browser/delivery_location.test.mjs`. Install the
 project's Chromium browser first using the browser package's install command.
+
+Naivas has an explicit map exception: **Use this area for Naivas** accepts the
+shopper's supplied area even when Naivas keeps its original location label. The
+app marks this **Area supplied · delivery unverified**, and search metadata
+records `user_override`. Search and cart still reuse the same browser session;
+the area is not forced into Naivas or represented as store-verified coverage.
+Check the delivery address and availability on Naivas at checkout. Carrefour
+and Quickmart retain their location checks.

@@ -50,8 +50,9 @@ input.on('line',async line=>{
   try {
     if(message.action==='confirm') {
       const selected=await confirmLocation(page,setup.store,setup.area,initialIdentity,navigate);
-      confirmed=selected;
-      emit({type:'confirmed',location:{area:setup.area,...confirmed}});
+      const {confirmation,...identity}=selected;
+      confirmed=identity;
+      emit({type:'confirmed',location:{area:setup.area,...confirmed,...(confirmation?{confirmation}: {})}});
     } else if(message.action==='search') {
       // A moved/expired location never falls back to the default area.
       await assertLocation();
@@ -76,7 +77,7 @@ input.on('line',async line=>{
       }
       await assertLocation();
       const checkedNavigate=async url=>{await navigate(url);await assertLocation();};
-      emit({type:'cart',status:'preparing',message:'Preparing your basket at the confirmed delivery location.'});
+      emit({type:'cart',status:'preparing',message:setup.store==='naivas'?'Preparing your Naivas basket. Delivery to your supplied area must be checked in Naivas checkout.':'Preparing your basket at the confirmed delivery location.'});
       const result=await fillCart({page,plan:{...message.plan,delivery:confirmed},navigate:checkedNavigate,cents,pause,
         emit:event=>emit({type:'cart',...event})});
       await assertLocation();
@@ -101,7 +102,7 @@ try {
   await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : roots.naivas+'search?term=milk');
   try { initialIdentity=await identity(true); } catch {}
   if(onSetup)await onSetup(page);
-  emit({type:'setup',status:'awaiting_input',message:'Select your delivery area in this store window. For Quickmart press Continue after choosing the address; the selected branch will open automatically when you confirm. Confirm here only when the store accepts delivery to your area.'});
+  emit({type:'setup',status:'awaiting_input',message:setup.store==='naivas'?'You can try selecting the address in Naivas. If its map does not update, choose Use this area for Naivas in the app to proceed with delivery unverified.':'Select your delivery area in this store window. For Quickmart press Continue after choosing the address; the selected branch will open automatically when you confirm. Confirm here only when the store accepts delivery to your area.'});
   await page.bringToFront();
 } catch(error) {if(onError)await onError(error);emit({type:'setup_error',message:error.name==='TimeoutError'?'The store took too long to load. Retry delivery setup.':'The store browser could not open. Check the installed browser runtime and connection, then retry.'});emit({type:'closed'});await browser?.close();process.exit(1);}
 

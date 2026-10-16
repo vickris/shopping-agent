@@ -33,17 +33,18 @@ export async function confirmLocation(page, store, area, initial, navigate) {
     await navigate(new URL(href, page.url()).href);
   }
   const selected = await readLocation(page, store, {ignoreDialog: store === 'naivas'});
-  if (initial && JSON.stringify(selected) === JSON.stringify(initial) && !selected.label.toLowerCase().includes(area.toLowerCase())) throw Error('location_not_saved');
+  if (store !== 'naivas' && initial && JSON.stringify(selected) === JSON.stringify(initial) && !selected.label.toLowerCase().includes(area.toLowerCase())) throw Error('location_not_saved');
   if (store === 'naivas') {
     // Naivas may leave its address drawer open after choosing an address.
-    // Only dismiss it after a selected location has been verified above.
+    // The user explicitly allows Naivas to keep its original map location.
     const close = page.locator('#address_drawer[role="dialog"][aria-hidden="false"] #close-address-drawer');
     if (await close.count()) {
       await close.click();
       await page.locator('#address_drawer[role="dialog"][aria-hidden="false"]').waitFor({state: 'hidden', timeout: 3000});
     }
   }
-  return readLocation(page, store);
+  const location = await readLocation(page, store);
+  return store === 'naivas' ? {...location, confirmation: 'user_override'} : location;
 }
 
 export function confirmationError(store, error) {

@@ -617,14 +617,20 @@ defmodule DealAgentWeb.ShopperLive do
                 profile
                 | status: "confirmed",
                   label: location["label"],
-                  message: "Using the delivery location you confirmed in the store window."
+                  message:
+                    if(location["confirmation"] == "user_override",
+                      do:
+                        "Using your supplied area. Naivas has not verified delivery there; check the address and availability at checkout.",
+                      else: "Using the delivery location you confirmed in the store window."
+                    )
               }
+              |> Map.put(:confirmation, location["confirmation"])
               |> Map.put(:branch_id, location["branch_id"])
               |> Map.put(:branch, location["branch"])
 
             socket =
               assign(
-                socket,
+                clear_flash(socket, :error),
                 :delivery_sessions,
                 Map.put(socket.assigns.delivery_sessions, store_id, updated)
               )
@@ -813,7 +819,11 @@ defmodule DealAgentWeb.ShopperLive do
                     delivery_label: profile.label,
                     branch_id: Map.get(profile, :branch_id),
                     branch: Map.get(profile, :branch),
-                    delivery_confirmation: :user_confirmed
+                    delivery_confirmation:
+                      if(Map.get(profile, :confirmation) == "user_override",
+                        do: :user_override,
+                        else: :user_confirmed
+                      )
                   }),
                 else: result.metadata
 
