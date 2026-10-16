@@ -62,10 +62,6 @@ try {
     finish(await prepareStore({page,plan,navigate,cents,pause,emit}));
     await page.bringToFront();
   } else {
-  if (plan.mode === "account") {
-    const {signInCarrefour} = await import("./account_cart.mjs");
-    await signInCarrefour({page,navigate,pause,products:plan.products});
-  }
   for (let index = 0; index < plan.products.length; index++) {
     const product = plan.products[index];
     emit({status: "preparing", message: `Adding ${index + 1} of ${plan.products.length}: ${product.name}`});
@@ -130,10 +126,6 @@ try {
   let result = {status: canCheckout ? "ready" : "needs_attention", verified: true,
     message: canCheckout ? "Your Carrefour cart is filled and verified. Review it and pay in the Carrefour browser window." : "Your Carrefour cart is filled and verified, but checkout is not available yet. Review the store’s minimum-order or delivery requirements in the Carrefour window.",
     estimated_total: plan.estimated_total, product_count: plan.products.length};
-  if (plan.mode === "account") {
-    const {confirmPhoneCart} = await import("./account_cart.mjs");
-    result = await confirmPhoneCart({pause,result});
-  }
   finish(result);
   await page.bringToFront();
   }

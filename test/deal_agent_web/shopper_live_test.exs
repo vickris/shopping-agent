@@ -138,7 +138,7 @@ defmodule DealAgentWeb.ShopperLiveTest do
     {:ok, view, _} = live(conn, "/")
     add_item(view, "milk")
     render_async(view, 1000)
-    assert has_element?(view, "#carrefour-total", "Incomplete")
+    assert has_element?(view, "#carrefour-total", "unselected item(s) will be skipped")
 
     view
     |> element("[phx-click='select-product'][phx-value-product-id='milk-500']")
@@ -147,7 +147,7 @@ defmodule DealAgentWeb.ShopperLiveTest do
     assert has_element?(view, ".carrefour-selection", "4 packs · Row cost: KES 396.00")
     assert has_element?(view, "[phx-value-product-id='milk-500'][aria-pressed='true']")
     assert has_element?(view, "#carrefour-total", "KES 396.00")
-    refute has_element?(view, "#carrefour-total", "Incomplete")
+    refute has_element?(view, "#carrefour-total", "unselected item(s) will be skipped")
 
     view
     |> element("[phx-click='select-product'][phx-value-product-id='milk-1']")
@@ -160,7 +160,7 @@ defmodule DealAgentWeb.ShopperLiveTest do
     assert has_element?(view, "#carrefour-total", "KES 567.00")
     view |> element("[phx-click='clear-selection']") |> render_click()
     refute has_element?(view, ".carrefour-selection")
-    assert has_element?(view, "#carrefour-total", "Incomplete")
+    assert has_element?(view, "#carrefour-total", "unselected item(s) will be skipped")
   end
 
   test "refresh invalidates selected prices and forged product IDs are ignored", %{conn: conn} do
@@ -177,7 +177,7 @@ defmodule DealAgentWeb.ShopperLiveTest do
     view |> element("[phx-click='retry-search'][phx-value-store='carrefour']") |> render_click()
     render_async(view, 1000)
     refute has_element?(view, ".carrefour-selection")
-    assert has_element?(view, "#carrefour-total", "Incomplete")
+    assert has_element?(view, "#carrefour-total", "unselected item(s) will be skipped")
   end
 
   test "three stores search through chat and selections and refreshes remain independent", %{
@@ -208,7 +208,7 @@ defmodule DealAgentWeb.ShopperLiveTest do
     view |> form(".naivas-selection form", %{packs: "5"}) |> render_submit()
     assert has_element?(view, "#naivas-total", "KES 350.00")
     assert has_element?(view, "#carrefour-total", "KES 378.00")
-    assert has_element?(view, "#quickmart-total", "Incomplete")
+    assert has_element?(view, "#quickmart-total", "unselected item(s) will be skipped")
     view |> element("[phx-click='remove-item']") |> render_click()
     refute has_element?(view, "#supermarket-results")
   end
@@ -343,6 +343,35 @@ defmodule DealAgentWeb.ShopperLiveTest do
     view |> element("button[phx-value-action='close']") |> render_click()
   end
 
+  test "shop now accepts selected products while missing rows are skipped", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+    add_item(view, "milk")
+    add_item(view, "bread")
+    render_async(view, 1000)
+
+    assert has_element?(
+             view,
+             "button[phx-click='shop-now'][phx-value-store='carrefour'][disabled]"
+           )
+
+    view |> element("[phx-value-product-id='milk-1']") |> render_click()
+
+    refute has_element?(
+             view,
+             "button[phx-click='shop-now'][phx-value-store='carrefour'][disabled]"
+           )
+
+    assert has_element?(view, "#carrefour-total", "1 unselected item(s) will be skipped")
+    assert has_element?(view, "#carrefour-total", "KES 378.00")
+    view |> element("button[phx-click='shop-now'][phx-value-store='carrefour']") |> render_click()
+    assert_push_event(view, "cart-notification", %{type: "success"}, 3000)
+    assert has_element?(view, "#carrefour-cart-status", "Cart ready")
+
+    view
+    |> element("button[phx-value-action='close'][phx-value-store='carrefour']")
+    |> render_click()
+  end
+
   test "Quickmart pauses for delivery input and continues its own cart", %{conn: conn} do
     {:ok, view, _} = live(conn, "/")
     add_item(view, "milk")
@@ -377,6 +406,67 @@ defmodule DealAgentWeb.ShopperLiveTest do
     view
     |> element("button[phx-value-action='close'][phx-value-store='quickmart']")
     |> render_click()
+  end
+
+  test "cell search replaces only that store's results and retains the requested quantity", %{
+    conn: conn
+  } do
+    {:ok, view, _} = live(conn, "/")
+    add_item(view, "milk")
+    render_async(view, 1000)
+    view |> element("[phx-value-product-id='milk-1']") |> render_click()
+    view |> element("[phx-value-product-id='quick-milk']") |> render_click()
+    view |> form("form[id^='carrefour-filter-']", %{query: "no match"}) |> render_change()
+    assert has_element?(view, ".candidate-filter-empty")
+    view |> form("form[id^='carrefour-filter-']", %{query: "slow milk"}) |> render_submit()
+    assert has_element?(view, ".carrefour-loading")
+    refute has_element?(view, ".carrefour-selection")
+    assert has_element?(view, ".quickmart-selection")
+    render_async(view, 1000)
+    assert has_element?(view, ".carrefour-product", "Brookside Whole Milk 1L")
+    refute has_element?(view, ".candidate-filter-empty")
+    assert has_element?(view, "#supermarket-results", "Store search: slow milk")
+    assert has_element?(view, "#supermarket-results", "Requested: 2 L")
+    view |> element("[phx-value-product-id='milk-1']") |> render_click()
+    assert has_element?(view, "#carrefour-total", "KES 378.00")
+  end
+
+  test "cell search works after empty or failed results and retry uses the new query", %{
+    conn: conn
+  } do
+    {:ok, view, _} = live(conn, "/")
+    add_item(view, "bread")
+    render_async(view, 1000)
+    assert has_element?(view, ".carrefour-empty")
+    view |> form("form[id^='carrefour-filter-']", %{query: "unreadable"}) |> render_submit()
+    render_async(view, 1000)
+    assert has_element?(view, ".carrefour-error")
+    view |> form("form[id^='carrefour-filter-']", %{query: "milk"}) |> render_submit()
+    render_async(view, 1000)
+    assert has_element?(view, ".carrefour-product")
+    view |> element("[phx-click='retry-search'][phx-value-store='carrefour']") |> render_click()
+    render_async(view, 1000)
+    assert has_element?(view, ".carrefour-product")
+    assert has_element?(view, "#supermarket-results", "bread")
+    assert has_element?(view, ".quickmart-empty")
+    view |> form("form[id^='carrefour-filter-']", %{query: "   "}) |> render_submit()
+    assert has_element?(view, ".carrefour-product")
+    assert render(view) =~ "Enter a supermarket search"
+  end
+
+  test "Quickmart and Naivas can each search a different query in place", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+    add_item(view, "bread")
+    render_async(view, 1000)
+
+    for store <- ["quickmart", "naivas"] do
+      view |> form("form[id^='#{store}-filter-']", %{query: "milk"}) |> render_submit()
+      render_async(view, 1000)
+      assert has_element?(view, ".#{store}-product", "Milk")
+    end
+
+    assert has_element?(view, ".carrefour-empty")
+    refute has_element?(view, ".carrefour-product")
   end
 
   defp add_item(view, name) do

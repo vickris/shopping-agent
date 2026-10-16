@@ -3,6 +3,13 @@ defmodule DealAgent.Logging.JSONFormatter do
 
   @fields [
     :request_id,
+    :search_event,
+    :search_id,
+    :supermarket,
+    :queue_depth,
+    :queue_wait_ms,
+    :product_count,
+    :http_status,
     :beam_agent_event,
     :run_key,
     :outcome,

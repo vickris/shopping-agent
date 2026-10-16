@@ -1,6 +1,6 @@
 # Supermarket cart preparation
 
-Shop now is enabled only after every shopping-list row has a selection for that store.
+Shop now is enabled after at least one shopping-list row has a selection for that store. Unselected rows are skipped and only selected costs enter the cart estimate.
 CartPlan freezes those choices, validates store-specific URLs, and combines repeated
 SKUs into an exact whole-pack quantity. Each product is capped at 50 packs.
 
@@ -51,3 +51,16 @@ Naivas emit a verified cart-filled alert with a reminder to review delivery, sig
 in if required and pay in the existing browser window. Neither runner enters
 credentials or submits checkout. Store changes can require selector updates;
 unverified/partial carts are reported as failures.
+
+
+Cart preparation starts as a guest without an app-enforced sign-in prerequisite.
+The store can still require login at checkout. The earlier experimental account
+sign-in/phone confirmation hooks are not called by the cart runner.
+
+Delivery-aware search remains separate from cart preparation: current searches
+still use the configured/default areas described in the comparison UI. Changing
+a cart's delivery address does not retroactively validate earlier search prices.
+A Syokimau investigation found Quickmart's nearby branch selector lists Diamond
+Biz and Highway–Mlolongo. Nearby listing is not a delivery guarantee. Each store's
+selected delivery location must be carried into search and cart sessions before
+we can mark its comparison column as confirmed for the user's delivery area.

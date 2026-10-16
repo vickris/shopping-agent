@@ -47,3 +47,42 @@ See the installed package's `deps/beam_agent/README.md` and
 `deps/beam_agent/docs/structured-logging.md`. PostgreSQL trace history, the local
 BeamAgent dashboard, token usage and cost reporting are separate opt-in features;
 this logging setup does not enable them.
+
+## Supermarket search logging
+
+The existing per-supermarket browser queues emit `supermarket.search.queued`,
+`supermarket.search.start`, and `supermarket.search.stop` JSON log events at info
+level. They use `search_event` and a unique opaque `search_id`, independent of
+BeamAgent's `run_key`. These cover the normal headless search path for Carrefour,
+Quickmart and Naivas; direct HTTP clients or injected test clients that bypass
+the browser queues are outside this instrumentation.
+
+Each record identifies the supermarket, pending `queue_depth` when queued or
+started, and `queue_wait_ms`. Terminal records report `outcome` (`ok`, `error`,
+or `cancelled`), execution `duration_ms` for started work, and `product_count`
+for successful parsed responses (including zero). Failures have a bounded
+`error_type`; browser HTTP failures may include a numeric `http_status`.
+Cancellation before dispatch is marked `phase: queued` without an execution
+duration. Active cancellation, worker failure, queue shutdown and the existing
+60-second worker timeout are terminal events, too. A request ID is carried
+through when present on the calling process.
+
+Search events do not contain queries, product names, URLs, raw browser output,
+exception text or worker/caller process references. Result counts describe the
+parsed browser response, before the adapter's product normalization and user
+selection. No new model calls or automatic search retries are introduced.
+
+## Searching inside a comparison cell
+
+Type in a cell's search field to filter its current results. Press Enter or the
+store's Search button to run a fresh supermarket search and replace that cell's
+results in place, including after empty results or a search error. Search again
+repeats the last submitted query for that cell. Other stores and the original
+shopping-list quantity remain unchanged. A fresh search clears that cell's
+selection; select a returned product to include its cost in the total again.
+
+
+Shop now can prepare a partial basket: select at least one product in a store's
+column. Unselected rows are skipped and remain visible in the comparison. The
+cart runner does not require sign-in before adding products; store-imposed login
+or delivery requirements at checkout still apply.

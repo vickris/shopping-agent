@@ -238,6 +238,46 @@
                       </button>
                     </form>
                   </div>
+                  <% filter_query = Map.get(@candidate_filters, {store.id, item.id}, "") %>
+                  <form
+                    phx-change="filter-products"
+                    phx-submit="search-products"
+                    class="candidate-filter mb-3"
+                    id={"#{store.id}-filter-#{item.id}"}
+                  >
+                    <input type="hidden" name="store" value={store.id} />
+                    <input type="hidden" name="item_id" value={item.id} />
+                    <label for={"#{store.id}-filter-input-#{item.id}"} class="sr-only">
+                      Filter results or search {store.label} for {item.name}
+                    </label>
+                    <input
+                      type="search"
+                      id={"#{store.id}-filter-input-#{item.id}"}
+                      name="query"
+                      value={filter_query}
+                      placeholder={"Search #{store.label}…"}
+                      autocomplete="off"
+                      phx-debounce="150"
+                      maxlength="200"
+                    />
+                    <button
+                      type="submit"
+                      disabled={Map.get(results, item.id) == :loading}
+                      class="mt-2 rounded border border-blue-200 px-3 py-1 text-sm font-medium text-blue-700 disabled:opacity-50"
+                      phx-disable-with="Searching…"
+                    >
+                      Search {store.label}
+                    </button>
+                    <p class="mt-1 text-xs text-gray-500">
+                      Type to filter; Enter or Search fetches new store results.
+                    </p>
+                    <p :if={selections[item.id]} class="mt-1 text-xs text-gray-500">
+                      A new search clears this cell’s selection.
+                    </p>
+                  </form>
+                  <p class="mb-2 text-xs text-gray-500">
+                    Store search: {Map.get(@store_queries, {store.id, item.id}, item.name)}
+                  </p>
                   <%= case Map.get(results, item.id) do %>
                     <% :loading -> %>
                       <p class={"#{store.id}-loading text-sm text-gray-500"} role="status">
@@ -248,30 +288,7 @@
                         No products returned for this search.
                       </p>
                     <% {:ok, result} -> %>
-                      <% filter_query = Map.get(@candidate_filters, {store.id, item.id}, "") %>
                       <% visible_products = filtered_products(result.products, filter_query) %>
-                      <form
-                        phx-change="filter-products"
-                        phx-submit="filter-products"
-                        class="candidate-filter mb-3"
-                        id={"#{store.id}-filter-#{item.id}"}
-                      >
-                        <input type="hidden" name="store" value={store.id} />
-                        <input type="hidden" name="item_id" value={item.id} />
-                        <label for={"#{store.id}-filter-input-#{item.id}"} class="sr-only">
-                          Filter {store.label} results for {item.name}
-                        </label>
-                        <input
-                          type="search"
-                          id={"#{store.id}-filter-input-#{item.id}"}
-                          name="query"
-                          value={filter_query}
-                          placeholder="Search these results…"
-                          autocomplete="off"
-                          phx-debounce="150"
-                          maxlength="200"
-                        />
-                      </form>
                       <p class="mb-3 text-xs text-gray-500">
                         {length(visible_products)} of {length(result.products)} search candidates · price per pack
                       </p>
@@ -280,7 +297,7 @@
                         class="candidate-filter-empty mb-3 text-sm text-gray-500"
                         role="status"
                       >
-                        No matching products. Try another name or clear the search.
+                        No matching products. Press Enter or Search to search the store, or clear the filter.
                       </p>
                       <ul class="candidate-list max-h-72 space-y-3 overflow-y-auto pr-2">
                         <li
@@ -337,7 +354,12 @@
                         {search_error_message(reason, store)}
                       </p>
                       <a
-                        href={store_search_url(store, item.name)}
+                        href={
+                          store_search_url(
+                            store,
+                            Map.get(@store_queries, {store.id, item.id}, item.name)
+                          )
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         class="mt-2 inline-block text-sm font-medium text-blue-700 underline"
@@ -371,14 +393,17 @@
                     {format_price(total.cost)}
                   </p>
                   <p :if={total.unresolved > 0} class="mt-1 text-sm text-gray-600">
-                    Incomplete · {total.unresolved} item(s) still need a selection
+                    {total.unresolved} unselected item(s) will be skipped
                   </p>
                   <% cart_job = @cart_jobs[store.id] %>
                   <button
                     phx-click="shop-now"
                     phx-value-store={store.id}
                     class="shop-now"
-                    disabled={total.unresolved > 0 or (cart_job && cart_job.status != "closed")}
+                    disabled={
+                      total.unresolved == length(@shopping_list.items) or
+                        (cart_job && cart_job.status != "closed")
+                    }
                   >
                     Shop now
                   </button>

@@ -1,15 +1,15 @@
 defmodule DealAgent.Checkout.CartPlan do
-  @moduledoc "Validated snapshot of a complete, user-selected supermarket basket."
+  @moduledoc "Validated snapshot of a user-selected supermarket basket, including partial shopping lists."
   alias DealAgent.Shopping.Selection
 
   @stores [:carrefour, :quickmart, :naivas]
 
   def build(items, selections, store) when store in @stores and items != [] do
-    if Selection.total(items, selections).unresolved != 0 do
-      {:error, :incomplete_basket}
-    else
-      lines = Enum.map(items, &selections[&1.id])
+    lines = items |> Enum.map(&selections[&1.id]) |> Enum.reject(&is_nil/1)
 
+    if lines == [] do
+      {:error, :empty_basket}
+    else
       valid = Enum.all?(lines, &valid_line?(&1, store))
 
       prices_consistent =
@@ -31,7 +31,11 @@ defmodule DealAgent.Checkout.CartPlan do
               id: id,
               name: first.product.name,
               url: first.product.url,
-              query: Enum.find(items, &(selections[&1.id].product.id == id)).name,
+              query:
+                Map.get(first, :search_query) ||
+                  Enum.find(items, fn item ->
+                    selections[item.id] && selections[item.id].product.id == id
+                  end).name,
               packs: Enum.sum(Enum.map(group, & &1.packs)),
               expected_price: Decimal.to_string(first.product.price, :normal)
             }
@@ -43,6 +47,8 @@ defmodule DealAgent.Checkout.CartPlan do
             {:ok,
              %{
                store: Atom.to_string(store),
+               selected_count: length(lines),
+               skipped_count: length(items) - length(lines),
                products: products,
                estimated_total:
                  Decimal.to_string(Selection.total(items, selections).cost, :normal)

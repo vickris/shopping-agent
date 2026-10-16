@@ -44,6 +44,7 @@ defmodule DealAgentWeb.ShopperLive do
      |> assign(:shopping_list, ShoppingList.new())
      |> assign(:cart_jobs, %{})
      |> assign(:candidate_filters, %{})
+     |> assign(:store_queries, %{})
      |> assign(:units, Item.units())
      |> assign(:messages, [])
      |> assign(:agent_status, :idle)
@@ -85,7 +86,8 @@ defmodule DealAgentWeb.ShopperLive do
             job = %{
               id: id,
               status: "preparing",
-              message: "Opening #{store.label} and preparing your selected basket…",
+              message:
+                "Opening #{store.label} for #{plan.selected_count} selected item(s); skipping #{plan.skipped_count} unselected item(s)…",
               estimated_total: plan.estimated_total
             }
 
@@ -160,6 +162,31 @@ defmodule DealAgentWeb.ShopperLive do
     end
   end
 
+  def handle_event(
+        "search-products",
+        %{"store" => _store_id, "item_id" => item_id, "query" => query} = params,
+        socket
+      )
+      when is_binary(query) do
+    item = Enum.find(socket.assigns.shopping_list.items, &(&1.id == item_id))
+    store = store_for(params)
+    query = String.trim(query)
+
+    cond do
+      is_nil(item) or is_nil(store) ->
+        {:noreply, socket}
+
+      Map.get(socket.assigns[store.results_key], item_id) == :loading ->
+        {:noreply, socket}
+
+      query == "" or String.length(query) > 200 ->
+        {:noreply, put_flash(socket, :error, "Enter a supermarket search of 1–200 characters.")}
+
+      true ->
+        {:noreply, search_store(socket, item, store, query)}
+    end
+  end
+
   @impl true
   def handle_event(
         "select-product",
@@ -177,7 +204,11 @@ defmodule DealAgentWeb.ShopperLive do
        assign(
          socket,
          store.selections_key,
-         Map.put(socket.assigns[store.selections_key], item_id, selection)
+         Map.put(
+           socket.assigns[store.selections_key],
+           item_id,
+           Map.put(selection, :search_query, result.query)
+         )
        )}
     else
       _ -> {:noreply, socket}
@@ -520,7 +551,8 @@ defmodule DealAgentWeb.ShopperLive do
   defp cart_error_message(:incomplete_basket),
     do: "Select a product for every Carrefour row before shopping."
 
-  defp cart_error_message(:empty_basket), do: "Add items and select Carrefour products first."
+  defp cart_error_message(:empty_basket),
+    do: "Select at least one Carrefour product before shopping."
 
   defp cart_error_message(:invalid_selection),
     do: "A selected Carrefour product is invalid or unavailable. Search again and reselect it."
@@ -556,14 +588,24 @@ defmodule DealAgentWeb.ShopperLive do
     Enum.reduce(@stores, socket, &search_store(&2, item, &1))
   end
 
-  defp search_store(socket, item, store) do
+  defp search_store(socket, item, store, query \\ nil) do
+    query = query || Map.get(socket.assigns.store_queries, {store.id, item.id}, item.name)
+    search_item = %{item | name: query}
     options = Application.get_env(:deal_agent, store.options_key, [])
 
     socket
+    |> assign(:store_queries, Map.put(socket.assigns.store_queries, {store.id, item.id}, query))
+    |> assign(
+      :candidate_filters,
+      Map.delete(socket.assigns.candidate_filters, {store.id, item.id})
+    )
     |> assign(store.selections_key, Map.delete(socket.assigns[store.selections_key], item.id))
     |> assign(store.results_key, Map.put(socket.assigns[store.results_key], item.id, :loading))
     |> start_async({:search_store, store.id, item.id}, fn ->
-      store.adapter.search(item, options)
+      case store.adapter.search(search_item, options) do
+        {:ok, result} -> {:ok, %{result | requested_item: item}}
+        other -> other
+      end
     end)
   end
 
@@ -595,6 +637,13 @@ defmodule DealAgentWeb.ShopperLive do
         socket,
         :candidate_filters,
         Map.filter(socket.assigns.candidate_filters, fn {{_, id}, _} -> id in item_ids end)
+      )
+
+    socket =
+      assign(
+        socket,
+        :store_queries,
+        Map.filter(socket.assigns.store_queries, fn {{_, id}, _} -> id in item_ids end)
       )
 
     Enum.reduce(@stores, socket, fn store, acc ->

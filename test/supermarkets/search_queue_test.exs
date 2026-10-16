@@ -101,6 +101,55 @@ defmodule DealAgent.Supermarkets.SearchQueueTest do
     refute_received :cancelled_job_ran
   end
 
+  test "running queues upgrade old idle state and accept old callers" do
+    for {store, name} <- [
+          {:carrefour, DealAgent.CarrefourQueue},
+          {:quickmart, DealAgent.QuickmartQueue},
+          {:naivas, DealAgent.NaivasQueue}
+        ] do
+      :sys.replace_state(name, fn _ -> %{active: nil, pending: :queue.new()} end)
+      assert {:ok, []} = SearchQueue.run(store, fn -> {:ok, []} end)
+      assert :sys.get_state(name).store == store
+      assert :legacy == GenServer.call(name, {:run, fn -> :legacy end})
+    end
+  end
+
+  test "reload preserves active and pending jobs from the previous state shape" do
+    parent = self()
+
+    first =
+      Task.async(fn ->
+        SearchQueue.run(:carrefour, fn ->
+          send(parent, {:legacy_worker, self()})
+
+          receive do
+            :release -> :first
+          end
+        end)
+      end)
+
+    assert_receive {:legacy_worker, worker}
+    second = Task.async(fn -> SearchQueue.run(:carrefour, fn -> :second end) end)
+    wait_pending(DealAgent.CarrefourQueue, 1)
+
+    :sys.replace_state(DealAgent.CarrefourQueue, fn state ->
+      old_job = fn job ->
+        Map.take(job, [:from, :work, :caller_ref, :pid, :worker_ref, :timer, :token])
+      end
+
+      %{
+        active: old_job.(state.active),
+        pending: state.pending |> :queue.to_list() |> Enum.map(old_job) |> :queue.from_list()
+      }
+    end)
+
+    send(worker, :release)
+    assert :first == Task.await(first)
+    assert :second == Task.await(second)
+    assert :sys.get_state(DealAgent.CarrefourQueue).store == :carrefour
+    assert :next == SearchQueue.run(:carrefour, fn -> :next end)
+  end
+
   defp wait_pending(name, count, attempts \\ 100)
 
   defp wait_pending(name, count, attempts) when attempts > 0 do

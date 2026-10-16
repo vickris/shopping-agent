@@ -31,6 +31,32 @@ defmodule DealAgent.Checkout.CartPlanTest do
     assert plan.estimated_total == "186"
   end
 
+  test "partial baskets include only selected rows and ignore stale selections" do
+    milk = Item.new("milk", quantity: 1, unit: :litre)
+    missing = Item.new("eggs")
+    stale = Item.new("removed")
+
+    assert {:ok, plan} =
+             CartPlan.build(
+               [milk, missing],
+               %{milk.id => selection(milk), stale.id => selection(stale)},
+               :carrefour
+             )
+
+    assert plan.selected_count == 1
+    assert plan.skipped_count == 1
+    assert plan.estimated_total == "124"
+    assert [%{packs: 2}] = plan.products
+  end
+
+  test "retains the cell search query for cart retrieval" do
+    item = Item.new("milk")
+    selected = Map.put(selection(item), :search_query, "brookside whole milk")
+
+    assert {:ok, %{products: [%{query: "brookside whole milk"}]}} =
+             CartPlan.build([item], %{item.id => selected}, :carrefour)
+  end
+
   test "accepts store-specific selections and rejects cross-store baskets" do
     item = Item.new("milk")
 
@@ -54,7 +80,7 @@ defmodule DealAgent.Checkout.CartPlanTest do
   test "blocks incomplete, unsupported and external product URLs" do
     item = Item.new("milk")
     assert {:error, :empty_basket} = CartPlan.build([], %{}, :carrefour)
-    assert {:error, :incomplete_basket} = CartPlan.build([item], %{}, :carrefour)
+    assert {:error, :empty_basket} = CartPlan.build([item], %{}, :carrefour)
     assert {:error, :unsupported_store} = CartPlan.build([item], %{}, :unknown)
     selected = selection(item)
     bad_price = %{selected | product: %{selected.product | price: nil}}
