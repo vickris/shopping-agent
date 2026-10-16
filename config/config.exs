@@ -54,9 +54,13 @@ config :tailwind,
   ]
 
 # Configures Elixir's Logger
+config :beam_agent, :structured_logging, true
+
 config :logger, :console,
-  format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  format: {DealAgent.Logging.JSONFormatter, :format},
+  metadata: :all
+
+config :logger, utc_log: true
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

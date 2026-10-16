@@ -58,7 +58,7 @@ defmodule DealAgent.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
-      {:beam_agent, "~> 0.2.0"},
+      {:beam_agent, "~> 0.3.0"},
       {:mint, "~> 1.11", override: true},
       {:req, "~> 0.7"}
     ]

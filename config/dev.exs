@@ -65,8 +65,7 @@ config :deal_agent, DealAgentWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :deal_agent, dev_routes: true
 
-# Do not include metadata nor timestamps in development logs
-config :logger, :console, format: "[$level] $message\n"
+# JSON formatting and structured BeamAgent metadata are configured in config.exs.
 
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.
