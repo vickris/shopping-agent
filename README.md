@@ -91,8 +91,8 @@ or delivery requirements at checkout still apply.
 
 Before searching, enter an area (for example, Syokimau) in each store's delivery
 card and choose **Set delivery location**. Select the delivery location on the
-supermarket website; for Quickmart, also open the chosen branch. Return to the
-app and click **I confirmed delivery in the store** once the store accepts it.
+supermarket website; for Quickmart, press Continue after choosing the address.
+Confirmation opens the selected branch automatically. Return to the app and click **I confirmed delivery in the store** once the store accepts it.
 The card displays the location reported by the website.
 
 Searches and cart preparation reuse that store's temporary browser context,
@@ -107,3 +107,12 @@ shopping page disconnects, the store window closes, or after 30 minutes. Reconfi
 the location after reopening the shopping page. The store's visible location
 label may be broader than the selected area; final address, delivery availability,
 fees and payment remain subject to the supermarket's checkout checks.
+
+Delivery confirmation shows progress and an actionable error when the store has
+not saved an address. Naivas closes its leftover address drawer only after a
+selected location is verified. Existing browser sessions must be closed and
+reopened after updating the browser scripts.
+
+Browser location regression tests use local HTML fixtures (no store requests):
+`node --test priv/carrefour_browser/delivery_location.test.mjs`. Install the
+project's Chromium browser first using the browser package's install command.

@@ -98,8 +98,27 @@ defmodule DealAgentWeb.ShopperLive do
     case socket.assigns.delivery_sessions[store_id] do
       %{id: id} ->
         case DeliverySessions.command(self(), id, action) do
-          :ok -> {:noreply, socket}
-          _ -> {:noreply, put_flash(socket, :error, "This store session is busy or closed.")}
+          :ok when action == "confirm" ->
+            profile = socket.assigns.delivery_sessions[store_id]
+
+            updated = %{
+              profile
+              | status: "confirming",
+                message: "Checking the store’s saved delivery location…"
+            }
+
+            {:noreply,
+             assign(
+               socket,
+               :delivery_sessions,
+               Map.put(socket.assigns.delivery_sessions, store_id, updated)
+             )}
+
+          :ok ->
+            {:noreply, socket}
+
+          _ ->
+            {:noreply, put_flash(socket, :error, "This store session is busy or closed.")}
         end
 
       _ ->
@@ -631,6 +650,17 @@ defmodule DealAgentWeb.ShopperLive do
 
           %{"type" => "setup_error", "message" => message} ->
             {:noreply, put_flash(socket, :error, message)}
+
+          %{"type" => "confirmation_failed", "message" => message} ->
+            updated = %{profile | status: "awaiting_input", message: message}
+
+            {:noreply,
+             socket
+             |> assign(
+               :delivery_sessions,
+               Map.put(socket.assigns.delivery_sessions, store_id, updated)
+             )
+             |> put_flash(:error, message)}
 
           %{"message" => message} ->
             updated = %{profile | status: "awaiting_input", message: message}

@@ -75,6 +75,27 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     assert has_element?(view, ".carrefour-error", "Confirm this store’s delivery location")
   end
 
+  for store <- ~w(quickmart naivas) do
+    test "#{store} confirmation shows progress, reports failure, and allows retry", %{conn: conn} do
+      store = unquote(store)
+      {:ok, view, _} = live(conn, "/")
+      view |> form("##{store}-delivery-form", %{area: "Retry"}) |> render_submit()
+      selector = "##{store}-delivery button[phx-value-action='confirm']"
+      wait_until(fn -> has_element?(view, selector) end)
+      view |> element(selector) |> render_click()
+      assert has_element?(view, selector <> "[disabled]", "Checking location")
+
+      wait_until(fn ->
+        has_element?(view, "##{store}-delivery", "Save the store delivery address")
+      end)
+
+      refute has_element?(view, selector <> "[disabled]")
+      refute has_element?(view, "##{store}-delivery", "Location confirmed")
+      view |> element(selector) |> render_click()
+      wait_until(fn -> has_element?(view, "##{store}-delivery", "Location confirmed") end)
+    end
+  end
+
   defp wait_until(check, attempts \\ 150)
   defp wait_until(_, 0), do: flunk("location UI did not reach expected state")
 

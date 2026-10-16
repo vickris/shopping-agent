@@ -61,18 +61,24 @@
               do: "Location confirmed",
               else: "Confirmation needed"}
           </p>
-          <p class="mt-1 text-xs text-gray-600">{profile.message}</p>
+          <p role="status" aria-live="polite" class="mt-1 text-xs text-gray-600">
+            {profile.message}
+          </p>
           <p :if={profile.label} class="mt-1 text-xs text-gray-500">
             Store location: {profile.label}
           </p>
           <button
-            :if={profile.status == "awaiting_input"}
+            :if={profile.status in ["awaiting_input", "confirming"]}
             phx-click="delivery-window"
             phx-value-action="confirm"
             phx-value-store={store.id}
+            disabled={profile.status == "confirming"}
+            phx-disable-with="Checking location…"
             class="mt-2 rounded bg-blue-600 px-3 py-2 text-sm text-white"
           >
-            I confirmed delivery in the store
+            {if profile.status == "confirming",
+              do: "Checking location…",
+              else: "I confirmed delivery in the store"}
           </button>
           <button
             phx-click="delivery-window"

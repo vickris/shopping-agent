@@ -1,11 +1,12 @@
 import readline from 'node:readline';
 const input=readline.createInterface({input:process.stdin});
 const emit=event=>console.log(JSON.stringify(event));
-let setup;
+let setup, confirmations=0;
 input.on('line',line=>{
  const m=JSON.parse(line);
  if(!setup){setup=m;emit({type:'setup',status:'awaiting_input',message:'Select the store delivery location, then confirm.'});return;}
  if(m.action==='close')process.exit(0);
+ if(m.action==='confirm' && setup.area==='Retry' && confirmations++===0){setTimeout(()=>emit({type:'confirmation_failed',message:'Save the store delivery address, then try again.'}),100);return;}
  if(m.action==='confirm')emit({type:'confirmed',location:{area:setup.area,label:setup.area+', Kenya',...(setup.store==='quickmart'?{branch_id:'7701'}:{})}});
  if(m.action==='search'){
   const reply=()=>emit(m.query==='changed'?{type:'reply',id:m.id,error:'location_changed'}:{type:'reply',id:m.id,html:`<div class="group"><a href="/mafken/en/milk/p/247170"><span class="line-clamp-2">Milk 500ml</span></a><div class="items-baseline"><span>KES</span><span>65.00</span></div><span class="line-clamp-1">500ml</span><button aria-label="Add to cart"></button></div>`});
