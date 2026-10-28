@@ -35,6 +35,17 @@ defmodule DealAgent.LLM.OpenAI do
       model: model,
       instructions: """
       Interpret shopping-list commands using one capture_intent call.
+      Supported supermarkets: carrefour, quickmart, naivas, foodplus (Chandarana).
+      Put explicitly requested stores in supermarkets, preserving their order.
+      Use supermarkets null if no preference was supplied; this keeps the shopper's
+      current comparison. "All supermarkets" means all four supported stores.
+      Preserve unsupported store names so validation can explain the limitation.
+      Store names and comparison instructions must never become shopping items.
+      Example: "I want to shop for milk and ice and water. Compare Naivas and Carrefour."
+      means add_items with milk, ice, water (quantity/unit null), and supermarkets
+      ["naivas", "carrefour"]. "Compare Quickmart" means compare with supermarkets
+      ["quickmart"], items null. "Which supermarkets are available?" means
+      list_supermarkets with all other fields null. Never invent coverage or stock.
       For multiple requested items use add_items and the items array, with top-level
       name, quantity and unit null. Extract each distinct item independently, preserving
       order, brands and qualifiers. Keep compound names such as "baking soda" together.

@@ -54,6 +54,45 @@ defmodule DealAgent.LLM.OpenAITest do
     refute_receive :openai_request
   end
 
+  test "the existing intent capture preserves the requested supermarkets" do
+    plug = fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      body = Jason.decode!(body)
+      assert [%{"name" => "capture_intent", "parameters" => schema}] = body["tools"]
+      assert "supermarkets" in schema["required"]
+      assert schema["properties"]["supermarkets"]["type"] == ["array", "null"]
+
+      Req.Test.json(conn, %{
+        "output" => [
+          %{
+            "type" => "function_call",
+            "call_id" => "scope_1",
+            "name" => "capture_intent",
+            "arguments" =>
+              Jason.encode!(%{
+                action: "add_items",
+                items: Enum.map(~w(milk ice water), &%{name: &1, quantity: nil, unit: nil}),
+                supermarkets: ["naivas", "carrefour"],
+                name: nil,
+                quantity: nil,
+                unit: nil
+              })
+          }
+        ]
+      })
+    end
+
+    assert {:ok, intent} =
+             ShoppingAgent.interpret("Milk, ice and water. Compare Naivas and Carrefour.",
+               llm:
+                 {OpenAI,
+                  [api_key: "test", tools: [CaptureIntent], request_options: [plug: plug]]}
+             )
+
+    assert intent.supermarkets == ["naivas", "carrefour"]
+    assert Enum.map(intent.items, & &1.name) == ~w(milk ice water)
+  end
+
   test "tool results finish locally without issuing a second model request" do
     assert {:reply, "Shopping intent captured."} =
              OpenAI.chat(

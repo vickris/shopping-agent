@@ -10,6 +10,14 @@ defmodule DealAgent.Shopping.IntentConverter do
           {:ok, Intent.t()}
           | {:error, term()}
   def convert(payload, raw_input) do
+    with {:ok, supermarkets} <-
+           DealAgent.Supermarkets.Registry.normalize(fetch(payload, :supermarkets)),
+         {:ok, intent} <- convert_action(payload, raw_input) do
+      {:ok, %{intent | supermarkets: supermarkets}}
+    end
+  end
+
+  defp convert_action(payload, raw_input) do
     case fetch(payload, :action) do
       "add_items" ->
         convert_add_items(payload, raw_input)
@@ -22,6 +30,9 @@ defmodule DealAgent.Shopping.IntentConverter do
 
       "clear_list" ->
         {:ok, Intent.clear_list(raw_input)}
+
+      "list_supermarkets" ->
+        {:ok, %Intent{action: :list_supermarkets, raw_input: raw_input}}
 
       "compare" ->
         {:ok, Intent.compare(raw_input)}

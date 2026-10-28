@@ -11,12 +11,14 @@ defmodule DealAgent.Shopping.Intent do
           | :remove_item
           | :clear_list
           | :compare
+          | :list_supermarkets
           | :unknown
 
   @type t :: %__MODULE__{
           action: action(),
           item: Item.t() | nil,
           items: [Item.t()],
+          supermarkets: [String.t()] | nil,
           item_name: String.t() | nil,
           raw_input: String.t() | nil
         }
@@ -26,6 +28,7 @@ defmodule DealAgent.Shopping.Intent do
     :item,
     :item_name,
     :raw_input,
+    supermarkets: nil,
     items: []
   ]
 

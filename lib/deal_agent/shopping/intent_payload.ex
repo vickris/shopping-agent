@@ -6,10 +6,12 @@ defmodule DealAgent.Shopping.IntentPayload do
   """
 
   @actions ~w(
+    add_items
     add_item
     remove_item
     clear_list
     compare
+    list_supermarkets
   )
 
   @units ~w(
@@ -24,7 +26,9 @@ defmodule DealAgent.Shopping.IntentPayload do
           required(:action) => String.t(),
           optional(:name) => String.t(),
           optional(:quantity) => String.t(),
-          optional(:unit) => String.t()
+          optional(:unit) => String.t(),
+          optional(:items) => [map()] | nil,
+          optional(:supermarkets) => [String.t()] | nil
         }
 
   def actions, do: @actions

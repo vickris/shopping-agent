@@ -12,6 +12,11 @@ defmodule DealAgent.Shopping.IntentHandler do
           | {:error, ShoppingList.t(), String.t()}
 
   @spec handle(Intent.t(), ShoppingList.t()) :: result()
+  def handle(%Intent{action: :list_supermarkets}, shopping_list) do
+    {:ok, shopping_list,
+     "You can compare #{DealAgent.Supermarkets.Registry.labels()}. Name the stores in your request, or say compare all supermarkets. Availability depends on your location. Foodplus checkout is currently unavailable."}
+  end
+
   def handle(%Intent{action: :add_items, items: items}, shopping_list) do
     updated = Enum.reduce(items, shopping_list, &ShoppingList.add_item(&2, &1))
 

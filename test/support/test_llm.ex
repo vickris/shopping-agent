@@ -52,6 +52,30 @@ defmodule TestLLM do
     end
   end
 
+  defp interpret("I want to shop for milk and ice and water. Compare Naivas and Carrefour.") do
+    tool_call(:capture_intent, %{
+      action: "add_items",
+      items: Enum.map(["milk", "ice", "water"], &%{name: &1, quantity: nil, unit: nil}),
+      supermarkets: ["naivas", "carrefour"]
+    })
+  end
+
+  defp interpret("Compare Quickmart"),
+    do: tool_call(:capture_intent, %{action: "compare", supermarkets: ["quickmart"]})
+
+  defp interpret("Compare all supermarkets"),
+    do:
+      tool_call(:capture_intent, %{
+        action: "compare",
+        supermarkets: ~w(carrefour quickmart naivas foodplus)
+      })
+
+  defp interpret("Which supermarkets are available?"),
+    do: tool_call(:capture_intent, %{action: "list_supermarkets"})
+
+  defp interpret("Milk from Tesco"),
+    do: tool_call(:capture_intent, %{action: "add_item", name: "milk", supermarkets: ["tesco"]})
+
   defp interpret("I want 2 litres of milk, eggs, baking soda kiwi and mangoes") do
     items =
       [%{name: "milk", quantity: "2", unit: "litre"}] ++

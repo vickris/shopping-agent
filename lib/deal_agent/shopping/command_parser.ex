@@ -38,7 +38,10 @@ defmodule DealAgent.Shopping.CommandParser do
            String.trim(input)
          ) do
       [_, amount, unit, name] ->
-        if Regex.match?(~r/[,;\n]|\b(?:and|or|then)\b/i, name) do
+        if Regex.match?(
+             ~r/[,;\n]|\b(?:and|or|then|compare|from|at|carrefour|quickmart|naivas|foodplus|chandarana)\b/i,
+             name
+           ) do
           {:error, :unsupported_command}
         else
           IntentConverter.convert(

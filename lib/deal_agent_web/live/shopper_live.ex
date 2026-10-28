@@ -632,6 +632,13 @@ defmodule DealAgentWeb.ShopperLive do
   defp store_for(params),
     do: Enum.find(@stores, &(&1.id == Map.get(params, "store", "carrefour")))
 
+  defp agent_error_message(:unsupported_supermarkets),
+    do:
+      "I can compare #{DealAgent.Supermarkets.Registry.labels()}. Please choose from these supermarkets."
+
+  defp agent_error_message(:active_cart_scope),
+    do: "Close the active cart for a supermarket before removing it from your comparison."
+
   defp agent_error_message(:missing_openai_api_key) do
     "The shopper assistant is not configured yet. Please set OPENAI_API_KEY and restart the server."
   end
@@ -687,10 +694,38 @@ defmodule DealAgentWeb.ShopperLive do
     assign(socket, :messages, messages)
   end
 
-  defp apply_shopping_intent(
-         socket,
-         intent
-       ) do
+  defp apply_shopping_intent(socket, intent) do
+    case comparison_scope(socket, intent) do
+      {:ok, socket, changed} ->
+        do_apply_shopping_intent(socket, intent, changed)
+
+      {:error, reason} ->
+        socket
+        |> append_assistant_message(agent_error_message(reason))
+        |> assign(:agent_status, :idle)
+    end
+  end
+
+  defp comparison_scope(socket, %{supermarkets: ids, action: action})
+       when is_list(ids) and action in [:add_item, :add_items, :compare] do
+    excluded = Enum.reject(socket.assigns.stores, &(&1.id in ids))
+
+    if Enum.any?(excluded, fn store ->
+         job = socket.assigns.cart_jobs[store.id]
+         job && job.status != "closed"
+       end) do
+      {:error, :active_cart_scope}
+    else
+      stores = Enum.map(ids, fn id -> Enum.find(@stores, &(&1.id == id)) end)
+      changed = Enum.map(socket.assigns.stores, & &1.id) != ids
+      socket = Enum.reduce(excluded, socket, &invalidate_store(&2, &1))
+      {:ok, socket |> assign(:stores, stores) |> location_progress(), changed}
+    end
+  end
+
+  defp comparison_scope(socket, _), do: {:ok, socket, false}
+
+  defp do_apply_shopping_intent(socket, intent, scope_changed) do
     case IntentHandler.handle(
            intent,
            socket.assigns.shopping_list
@@ -699,14 +734,24 @@ defmodule DealAgentWeb.ShopperLive do
         socket =
           socket
           |> assign(:shopping_list, shopping_list)
-          |> append_assistant_message(reply)
+          |> append_assistant_message(
+            if intent.action in [:add_item, :add_items] and is_list(intent.supermarkets),
+              do:
+                reply <>
+                  " Comparing " <> Enum.map_join(socket.assigns.stores, ", ", & &1.label) <> ".",
+              else: reply
+          )
           |> assign(:agent_status, :idle)
           |> prune_search_results()
 
-        case intent.action do
-          :add_item -> search_item(socket, intent.item)
-          :add_items -> Enum.reduce(intent.items, socket, &search_item(&2, &1))
-          _ -> socket
+        if scope_changed and intent.action in [:add_item, :add_items] do
+          search_all_items(socket)
+        else
+          case intent.action do
+            :add_item -> search_item(socket, intent.item)
+            :add_items -> Enum.reduce(intent.items, socket, &search_item(&2, &1))
+            _ -> socket
+          end
         end
 
       {:compare, shopping_list, reply} ->
@@ -905,7 +950,10 @@ defmodule DealAgentWeb.ShopperLive do
   end
 
   defp location_progress(socket) do
-    profiles = Map.values(socket.assigns.delivery_sessions)
+    profiles =
+      socket.assigns.delivery_sessions
+      |> Map.take(Enum.map(socket.assigns.stores, & &1.id))
+      |> Map.values()
 
     if Enum.any?(profiles, &(Map.get(&1, :source) == :browser_location)) do
       message =
@@ -913,7 +961,8 @@ defmodule DealAgentWeb.ShopperLive do
           Enum.any?(profiles, &(&1.status in ["opening", "confirming"])) ->
             "Finding nearby service areas for each supermarket…"
 
-          length(profiles) == length(@stores) and Enum.all?(profiles, &(&1.status == "confirmed")) ->
+          length(profiles) == length(socket.assigns.stores) and
+              Enum.all?(profiles, &(&1.status == "confirmed")) ->
             "Nearby stores are ready. Select your products, then Shop now."
 
           true ->
@@ -971,10 +1020,16 @@ defmodule DealAgentWeb.ShopperLive do
     do: Decimal.to_string(item.quantity, :normal) <> format_unit(item.unit)
 
   defp search_item(socket, item) do
-    Enum.reduce(@stores, socket, &search_store(&2, item, &1))
+    Enum.reduce(socket.assigns.stores, socket, &search_store(&2, item, &1))
   end
 
   defp search_store(socket, item, store, query \\ nil) do
+    if Enum.any?(socket.assigns.stores, &(&1.id == store.id)),
+      do: do_search_store(socket, item, store, query),
+      else: socket
+  end
+
+  defp do_search_store(socket, item, store, query) do
     query = query || Map.get(socket.assigns.store_queries, {store.id, item.id}, item.name)
     search_item = %{item | name: query}
     options = Application.get_env(:deal_agent, store.options_key, [])
@@ -1111,7 +1166,8 @@ defmodule DealAgentWeb.ShopperLive do
   defp put_search_result(socket, store_id, item_id, result) do
     store = store_for(%{"store" => store_id})
 
-    if store && Enum.any?(socket.assigns.shopping_list.items, &(&1.id == item_id)) do
+    if store && Enum.any?(socket.assigns.stores, &(&1.id == store_id)) &&
+         Enum.any?(socket.assigns.shopping_list.items, &(&1.id == item_id)) do
       assign(
         socket,
         store.results_key,
@@ -1292,7 +1348,6 @@ defmodule DealAgentWeb.ShopperLive do
     |> assign(:naivas_results, %{})
     |> assign(:quickmart_selections, %{})
     |> assign(:quickmart_results, %{})
-    |> assign(:stores, @stores)
     |> assign(:carrefour_selections, %{})
     |> assign(:carrefour_results, %{})
     |> append_assistant_message("Your shopping list has been cleared.")

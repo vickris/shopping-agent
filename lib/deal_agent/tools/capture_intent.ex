@@ -14,7 +14,7 @@ defmodule DealAgent.Tools.CaptureIntent do
     Records the user's shopping intent.
 
     Supported actions:
-    add_items, add_item, remove_item, clear_list, compare.
+    add_items, add_item, remove_item, clear_list, compare, list_supermarkets.
     """
   end
 
@@ -29,7 +29,8 @@ defmodule DealAgent.Tools.CaptureIntent do
             "add_item",
             "remove_item",
             "clear_list",
-            "compare"
+            "compare",
+            "list_supermarkets"
           ]
         },
         items: %{
@@ -47,6 +48,12 @@ defmodule DealAgent.Tools.CaptureIntent do
             required: ["name", "quantity", "unit"],
             additionalProperties: false
           }
+        },
+        supermarkets: %{
+          type: ["array", "null"],
+          items: %{type: "string"},
+          description:
+            "Only explicitly requested supermarkets; null retains the current comparison. Preserve unsupported names for validation."
         },
         name: %{
           type: ["string", "null"]
@@ -68,6 +75,7 @@ defmodule DealAgent.Tools.CaptureIntent do
       },
       required: [
         "items",
+        "supermarkets",
         "action",
         "name",
         "quantity",
@@ -90,6 +98,7 @@ defmodule DealAgent.Tools.CaptureIntent do
     %{
       action: get(args, :action),
       items: get(args, :items),
+      supermarkets: get(args, :supermarkets),
       name: get(args, :name),
       quantity: get(args, :quantity),
       unit: get(args, :unit)
