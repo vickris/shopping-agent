@@ -12,11 +12,7 @@ Results depend on the store's availability and delivery-location confirmation.
 ![Live Carrefour search, product selection and calculated total](docs/images/live-carrefour-flow.gif)
 
 Recorded against the running app on 28 October 2026 using real OpenAI and
-Carrefour responses. Playwright supplies simulated GPS for the public Greatwall
-Gardens/Pridelands area; store confirmation and product data are live. Carrefour
-returned 60 candidates. Selecting 250 ml milk at KES 46 produced eight packs and
-a KES 368 total for the 2-litre request. Prices are capture-time observations.
-Waiting is accelerated; no product responses or token counts are mocked.
+Carrefour responses to a store near me.
 
 ![BeamAgent's real run monitor](docs/images/agent-run-monitor.gif)
 
@@ -49,26 +45,13 @@ the language model does not invent prices or calculate the basket.
 
 Install Elixir/Erlang, PostgreSQL and Node.js, then:
 
-  * Run `mix setup` to install and setup dependencies
-  * Run `npm ci --prefix priv/carrefour_browser`
-  * Install browsers with `cd priv/carrefour_browser && npx playwright install --with-deps chromium firefox`
-  * Set `OPENAI_API_KEY` in the server's environment before starting it. Do not commit the key.
-  * Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+- Run `mix setup` to install and setup dependencies
+- Run `npm ci --prefix priv/carrefour_browser`
+- Install browsers with `cd priv/carrefour_browser && npx playwright install --with-deps chromium firefox`
+- Set `OPENAI_API_KEY` in the server's environment before starting it. Do not commit the key.
+- Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
-
-For the friends beta, use the [Render Docker deployment guide](docs/deploy-render.md).
-The online preview supports comparison and selection; desktop-only checkout
-controls are disabled until a remote-browser handoff is implemented. Foodplus
-currently supports comparison only, including in local mode.
-
-## Learn more
-
-  * Official website: https://www.phoenixframework.org/
-  * Guides: https://hexdocs.pm/phoenix/overview.html
-  * Docs: https://hexdocs.pm/phoenix
-  * Forum: https://elixirforum.com/c/phoenix-forum
-  * Source: https://github.com/phoenixframework/phoenix
 
 ## Agent run logging
 
@@ -151,7 +134,6 @@ results in place, including after empty results or a search error. Search again
 repeats the last submitted query for that cell. Other stores and the original
 shopping-list quantity remain unchanged. A fresh search clears that cell's
 selection; select a returned product to include its cost in the total again.
-
 
 Shop now can prepare a partial basket: select at least one product in a store's
 column. Unselected rows are skipped and remain visible in the comparison. The
