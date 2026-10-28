@@ -3,6 +3,7 @@ import readline from 'node:readline';
 import {fileURLToPath} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {fillCart} from './cart_flow.mjs';
+import {cartFailure} from './cart_errors.mjs';
 import {readLocation, confirmLocation, confirmationError} from './delivery_location.mjs';
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 delete process.env.OPENAI_API_KEY;
@@ -87,7 +88,7 @@ input.on('line',async line=>{
   } catch(error) {
     const kind=['location_changed','location_unconfirmed','session_busy','invalid_basket','price_changed','cart_mismatch'].includes(error.message)?error.message:'store_unavailable';
     if(message.action==='confirm')emit({type:'confirmation_failed',message:confirmationError(setup.store,error)});
-    else if(message.action==='cart')emit({type:'cart',status:'failed',verified:false,message:'Cart preparation stopped ('+kind+'). Review the store window; no automatic retry was made.'});
+    else if(message.action==='cart')emit({type:'cart',...cartFailure(error)});
     else emit({type:'reply',id:message.id,error:kind});
     if(message.action!=='confirm' && (kind==='location_changed'||kind==='location_unconfirmed')){confirmed=null;emit({type:'invalidated'});}
   } finally {busy=false;}

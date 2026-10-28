@@ -1,3 +1,4 @@
+import {verifyCarrefourCart} from './carrefour_cart.mjs';
 export async function fillCart({page,plan,navigate,cents,pause,emit}) {
   if (plan.store !== "carrefour") {
     const {prepareStore} = await import("./store_carts.mjs");
@@ -44,25 +45,10 @@ export async function fillCart({page,plan,navigate,cents,pause,emit}) {
   }
 
   await navigate("https://www.carrefour.ke/mafken/en/app/cart");
-  await page.locator("[id^='entries-'] [role='combobox']").first().waitFor({state:"visible", timeout:15000});
-  const rows = page.locator("[id^='entries-'] div.relative.rounded-xl").filter({has:page.getByRole("combobox")});
-  // Cart controls become visible before their guest-session quantities load.
-  // Wait for the exact snapshot instead of treating the loading state as failure.
-  await page.waitForFunction(expected => {
-    const rows = Array.from(document.querySelectorAll("[id^='entries-'] div.relative.rounded-xl"))
-      .filter(row => row.querySelector('[role="combobox"]'));
-    return rows.length === expected.length && expected.every(p => rows.some(row => {
-      const link = row.querySelector('a[href*="/p/"]');
-      return link && new URL(link.href).pathname.endsWith("/p/" + p.id)
-        && row.querySelector('[role="combobox"]').textContent.trim() === String(p.packs);
-    }));
-  }, plan.products.map(p => ({id:p.id, packs:p.packs})), {timeout:20000}).catch(() => {throw new Error("cart_mismatch");});
-  if (await rows.count() !== plan.products.length) throw new Error("cart_mismatch");
-  for (const p of plan.products) {
-    const row = rows.filter({has: page.locator(`a[href*="/p/${p.id}?"]`)});
-    if (await row.count() !== 1 || (await row.getByRole("combobox").innerText()).trim() !== String(p.packs)) throw new Error("cart_mismatch");
-  }
-  const checkout = page.getByRole("button", {name:"Checkout",exact:true});
+  // Wait for hydrated SKU quantities and current line totals, not an obsolete
+  // entries-* container or quantity dropdown.
+  await verifyCarrefourCart(page, plan.products, cents);
+  const checkout = page.getByRole("button", {name:/^Checkout(?:\s*\(.*\))?$/i});
   const canCheckout = (await checkout.count()) > 0 && await checkout.first().isEnabled();
   let result = {status: canCheckout ? "ready" : "needs_attention", verified: true,
     message: canCheckout ? "Your Carrefour cart is filled and verified. Review it and pay in the Carrefour browser window." : "Your Carrefour cart is filled and verified, but checkout is not available yet. Review the store’s minimum-order or delivery requirements in the Carrefour window.",
