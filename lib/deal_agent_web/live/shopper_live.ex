@@ -40,6 +40,8 @@ defmodule DealAgentWeb.ShopperLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    DealAgent.Delivery.Coordinates.protect_logs()
+
     {:ok,
      socket
      |> assign(:shopping_list, ShoppingList.new())
@@ -47,6 +49,7 @@ defmodule DealAgentWeb.ShopperLive do
      |> assign(:candidate_filters, %{})
      |> assign(:store_queries, %{})
      |> assign(:delivery_sessions, %{})
+     |> assign(:location_message, nil)
      |> assign(:units, Item.units())
      |> assign(:messages, [])
      |> assign(:agent_status, :idle)
@@ -59,6 +62,85 @@ defmodule DealAgentWeb.ShopperLive do
      |> assign(:carrefour_results, %{})
      |> assign_item_form()
      |> assign_chat_form()}
+  end
+
+  def handle_event("location-error", %{"reason" => reason}, socket) do
+    message =
+      case reason do
+        "denied" ->
+          "Location permission was denied. Allow location access in your browser or enter an area below."
+
+        "timeout" ->
+          "Finding your location took too long. Try again or enter an area below."
+
+        "unsupported" ->
+          "Location access needs HTTPS or localhost and a supported browser. You can enter an area below."
+
+        _ ->
+          "Your location is unavailable. Try again or enter an area below."
+      end
+
+    {:noreply, assign(socket, :location_message, message)}
+  end
+
+  def handle_event("location-detected", point, socket) do
+    with {:ok, %{} = _coordinates} <- DealAgent.Delivery.Coordinates.normalize(point),
+         false <- Enum.any?(socket.assigns.cart_jobs, fn {_, job} -> job.status != "closed" end) do
+      for {_, profile} <- socket.assigns.delivery_sessions,
+          do: DeliverySessions.command(self(), profile.id, "close")
+
+      socket = Enum.reduce(@stores, socket, &invalidate_store(&2, &1))
+      socket = assign(socket, :delivery_sessions, %{})
+
+      profiles =
+        Map.new(@stores, fn store ->
+          profile =
+            case DeliverySessions.start(self(), store.id, "Near you", point) do
+              {:ok, id} ->
+                %{
+                  id: id,
+                  status: "opening",
+                  area: "Near you",
+                  label: nil,
+                  source: :browser_location,
+                  message: "Finding the store serving your current location…"
+                }
+
+              _ ->
+                nil
+            end
+
+          {store.id, profile}
+        end)
+        |> Map.reject(fn {_, value} -> is_nil(value) end)
+
+      {:noreply,
+       socket
+       |> assign(:delivery_sessions, profiles)
+       |> assign(
+         :location_message,
+         if(map_size(profiles) == length(@stores),
+           do: "Location received. Finding nearby service areas for each supermarket…",
+           else: "Some store browsers could not start. Retry or set those stores manually below."
+         )
+       )}
+    else
+      true ->
+        {:noreply,
+         assign(
+           socket,
+           :location_message,
+           "Close your active cart windows before changing the shopping location."
+         )}
+
+      _ ->
+        {:noreply,
+         assign(
+           socket,
+           :location_message,
+           "The browser returned an invalid location. Try again or enter an area below."
+         )}
+    end
   end
 
   def handle_event("setup-delivery", %{"store" => store_id, "area" => area} = params, socket) do
@@ -621,7 +703,12 @@ defmodule DealAgentWeb.ShopperLive do
                     if(location["confirmation"] == "user_override",
                       do:
                         "Using your supplied area. Naivas has not verified delivery there; check the address and availability at checkout.",
-                      else: "Using the delivery location you confirmed in the store window."
+                      else:
+                        if(location["confirmation"] == "geolocation",
+                          do:
+                            "Using the store service area selected from your current location. Final delivery availability is checked at checkout.",
+                          else: "Using the delivery location you confirmed in the store window."
+                        )
                     )
               }
               |> Map.put(:confirmation, location["confirmation"])
@@ -634,6 +721,8 @@ defmodule DealAgentWeb.ShopperLive do
                 :delivery_sessions,
                 Map.put(socket.assigns.delivery_sessions, store_id, updated)
               )
+
+            socket = location_progress(socket)
 
             {:noreply,
              Enum.reduce(socket.assigns.shopping_list.items, socket, &search_store(&2, &1, store))}
@@ -668,6 +757,16 @@ defmodule DealAgentWeb.ShopperLive do
              )
              |> put_flash(:error, message)}
 
+          %{"type" => "setup", "status" => "opening", "message" => message} ->
+            updated = %{profile | status: "opening", message: message}
+
+            {:noreply,
+             assign(
+               socket,
+               :delivery_sessions,
+               Map.put(socket.assigns.delivery_sessions, store_id, updated)
+             )}
+
           %{"message" => message} ->
             updated = %{profile | status: "awaiting_input", message: message}
 
@@ -676,7 +775,8 @@ defmodule DealAgentWeb.ShopperLive do
                socket,
                :delivery_sessions,
                Map.put(socket.assigns.delivery_sessions, store_id, updated)
-             )}
+             )
+             |> location_progress()}
 
           _ ->
             {:noreply, socket}
@@ -719,6 +819,28 @@ defmodule DealAgentWeb.ShopperLive do
 
       _ ->
         {:noreply, socket}
+    end
+  end
+
+  defp location_progress(socket) do
+    profiles = Map.values(socket.assigns.delivery_sessions)
+
+    if Enum.any?(profiles, &(Map.get(&1, :source) == :browser_location)) do
+      message =
+        cond do
+          Enum.any?(profiles, &(&1.status in ["opening", "confirming"])) ->
+            "Finding nearby service areas for each supermarket…"
+
+          length(profiles) == length(@stores) and Enum.all?(profiles, &(&1.status == "confirmed")) ->
+            "Store locations are ready. Naivas delivery coverage remains unverified."
+
+          true ->
+            "Some stores need manual location setup. Confirmed stores are ready to search."
+        end
+
+      assign(socket, :location_message, message)
+    else
+      socket
     end
   end
 

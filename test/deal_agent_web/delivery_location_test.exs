@@ -40,6 +40,15 @@ defmodule DealAgentWeb.DeliveryLocationTest do
       3000
     )
 
+    render_hook(view, "location-detected", %{
+      "latitude" => -1.367,
+      "longitude" => 36.936,
+      "accuracy" => 100
+    })
+
+    assert has_element?(view, "#location-message", "Close your active cart windows")
+    assert has_element?(view, "#carrefour-delivery", "Syokimau")
+
     view
     |> element(
       "button[phx-click='cart-window'][phx-value-action='close'][phx-value-store='carrefour']"
@@ -100,6 +109,42 @@ defmodule DealAgentWeb.DeliveryLocationTest do
 
       wait_until(fn -> has_element?(view, "##{store}-delivery", expected) end)
     end
+  end
+
+  test "browser location selects all store sessions automatically and can replace a manual session",
+       %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+    view |> form("#carrefour-delivery-form", %{area: "Syokimau"}) |> render_submit()
+
+    wait_until(fn ->
+      has_element?(view, "#carrefour-delivery button[phx-value-action='confirm']")
+    end)
+
+    render_hook(view, "location-detected", %{
+      "latitude" => -1.367,
+      "longitude" => 36.936,
+      "accuracy" => 100
+    })
+
+    for store <- ~w(carrefour quickmart) do
+      wait_until(fn -> has_element?(view, "##{store}-delivery", "Location confirmed") end)
+    end
+
+    wait_until(fn -> has_element?(view, "#naivas-delivery", "delivery unverified") end)
+    assert has_element?(view, "#quickmart-delivery", "Nearby Quickmart")
+    refute render(view) =~ "36.936"
+    refute render(view) =~ "-1.367"
+  end
+
+  test "denied or invalid geolocation leaves manual area entry available", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+    render_hook(view, "location-error", %{"reason" => "denied"})
+    assert has_element?(view, "#location-message", "permission was denied")
+    render_hook(view, "location-detected", %{"latitude" => 1000, "longitude" => 36})
+    assert has_element?(view, "#location-message", "invalid location")
+    assert has_element?(view, "#carrefour-delivery-form")
+    assert has_element?(view, "#quickmart-delivery-form")
+    assert has_element?(view, "#naivas-delivery-form")
   end
 
   defp wait_until(check, attempts \\ 150)

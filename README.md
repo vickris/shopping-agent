@@ -89,8 +89,9 @@ or delivery requirements at checkout still apply.
 
 ## Confirmed delivery locations
 
-Before searching, enter an area (for example, Syokimau) in each store's delivery
-card and choose **Set delivery location**. Select the delivery location on the
+Choose **Use my location** to select store service areas automatically, or enter
+an area (for example, Syokimau) in a store's delivery card and choose
+**Set delivery location** for manual setup. Select the delivery location on the
 supermarket website; for Quickmart, press Continue after choosing the address.
 Confirmation opens the selected branch automatically. Return to the app and click **I confirmed delivery in the store** once the store accepts it.
 The card displays the location reported by the website.
@@ -124,3 +125,30 @@ records `user_override`. Search and cart still reuse the same browser session;
 the area is not forced into Naivas or represented as store-verified coverage.
 Check the delivery address and availability on Naivas at checkout. Carrefour
 and Quickmart retain their location checks.
+
+## Find stores using browser location
+
+Choose **Use my location** on the homepage and allow the browser prompt. Location
+access requires HTTPS or localhost. The app takes one location reading per click;
+it does not track movement or save coordinates to browser storage. Coordinates
+are used only in temporary supermarket browser sessions and are filtered from
+Phoenix parameter logs. The page explains sharing with the stores and their map
+providers before requesting permission.
+
+Quickmart uses its own current-location and closest-branch resolver. Carrefour
+resolves an address with its map provider and selects the corresponding delivery
+area; autocomplete matches more than 2 km from the supplied point are rejected.
+These are store service areas, not a distance-ranked directory of all physical
+supermarkets. Naivas retains the explicitly unverified map exception. Final
+coverage, delivery address and fees remain the store's checkout decision.
+
+Existing searches and selections are cleared when the location changes. A live
+cart must be closed first so changing location cannot interrupt checkout. If
+permission is denied or a store cannot resolve the location, manual area entry
+remains available; a default branch is never silently marked GPS-confirmed.
+Search and cart preparation retain the same store browser context. A generic
+guest-cart URL does not transfer that browser's cart to another device; phone
+handoff requires a supermarket-supported shared cart or verified account sync.
+
+Additional browser checks:
+`node --test priv/carrefour_browser/automatic_location.test.mjs`.

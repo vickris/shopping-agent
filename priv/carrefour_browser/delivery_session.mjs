@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {fillCart} from './cart_flow.mjs';
 import {cartFailure} from './cart_errors.mjs';
+import {selectAutomaticLocation} from './automatic_location.mjs';
 import {readLocation, confirmLocation, confirmationError} from './delivery_location.mjs';
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 delete process.env.OPENAI_API_KEY;
@@ -99,12 +100,28 @@ try {
   const {firefox,chromium}=await import('playwright');
   browser=await (setup.store==='quickmart'?chromium:firefox).launch({headless,...(setup.store==='quickmart'?{channel:'chromium'}:{})});
   browser.on('disconnected',()=>{emit({type:'closed'});process.exit(0);});
-  page=await (await browser.newContext()).newPage();
+  const point=setup.coordinates;
+  if(point && (![point.latitude,point.longitude,point.accuracy].every(Number.isFinite)||Math.abs(point.latitude)>90||Math.abs(point.longitude)>180||point.accuracy<0))throw Error('invalid_setup');
+  const context=await browser.newContext(point?{geolocation:point}:{});
+  if(point)await context.grantPermissions(['geolocation'],{origin: new URL(roots[setup.store]).origin});
+  page=await context.newPage();
   await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : roots.naivas+'search?term=milk');
   try { initialIdentity=await identity(true); } catch {}
   if(onSetup)await onSetup(page);
+  if(point) {
+    emit({type:'setup',status:'opening',message:'Finding the store serving your current location…'});
+    try {
+      const {confirmation,...identity}=await selectAutomaticLocation(page,setup.store,point,navigate);
+      confirmed=identity;
+      emit({type:'confirmed',location:{area:setup.area,...identity,confirmation}});
+    } catch(error) {
+      if(onError)await onError(error);
+      emit({type:'setup',status:'awaiting_input',message:'The store could not select a nearby service area automatically. No default location was accepted. Set an address in its window or close this session and enter an area manually.'});
+    }
+  } else {
   emit({type:'setup',status:'awaiting_input',message:setup.store==='naivas'?'You can try selecting the address in Naivas. If its map does not update, choose Use this area for Naivas in the app to proceed with delivery unverified.':'Select your delivery area in this store window. For Quickmart press Continue after choosing the address; the selected branch will open automatically when you confirm. Confirm here only when the store accepts delivery to your area.'});
   await page.bringToFront();
+  }
 } catch(error) {if(onError)await onError(error);emit({type:'setup_error',message:error.name==='TimeoutError'?'The store took too long to load. Retry delivery setup.':'The store browser could not open. Check the installed browser runtime and connection, then retry.'});emit({type:'closed'});await browser?.close();process.exit(1);}
 
 }

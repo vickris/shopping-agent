@@ -21,10 +21,12 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {Notyf} from "notyf"
+import {BrowserLocation} from "./location"
 import topbar from "../vendor/topbar"
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {
+  hooks: {BrowserLocation},
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken}
 })

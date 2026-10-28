@@ -4,9 +4,11 @@ defmodule DealAgent.Delivery.Sessions do
   @stores ~w(carrefour quickmart naivas)
   def start_link(_), do: GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
 
-  def start(owner, store, area) when store in @stores and is_binary(area) do
-    ensure_started()
-    GenServer.call(__MODULE__, {:start, owner, store, String.trim(area)})
+  def start(owner, store, area, coordinates \\ nil) when store in @stores and is_binary(area) do
+    with {:ok, point} <- DealAgent.Delivery.Coordinates.normalize(coordinates) do
+      ensure_started()
+      GenServer.call(__MODULE__, {:start, owner, store, String.trim(area), point})
+    end
   end
 
   def command(owner, id, action) when action in ~w(open close confirm resume),
@@ -22,7 +24,7 @@ defmodule DealAgent.Delivery.Sessions do
   def init(state), do: {:ok, state}
 
   @impl true
-  def handle_call({:start, owner, store, area}, _, sessions) do
+  def handle_call({:start, owner, store, area, point}, _, sessions) do
     cond do
       area == "" or String.length(area) > 200 ->
         {:reply, {:error, :invalid_area}, sessions}
@@ -39,7 +41,11 @@ defmodule DealAgent.Delivery.Sessions do
         case runtime.start() do
           {:ok, port} ->
             id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
-            Port.command(port, Jason.encode!(%{store: store, area: area}) <> "\n")
+
+            Port.command(
+              port,
+              Jason.encode!(%{store: store, area: area, coordinates: point}) <> "\n"
+            )
 
             session = %{
               port: port,
@@ -61,6 +67,9 @@ defmodule DealAgent.Delivery.Sessions do
 
   def handle_call({:command, owner, id, action}, _, sessions) do
     case sessions[id] do
+      %{owner: ^owner} when action == "close" ->
+        {:reply, :ok, close_session(sessions, id)}
+
       %{owner: ^owner, confirmed: true} when action == "confirm" ->
         {:reply, {:error, :already_confirmed}, sessions}
 
