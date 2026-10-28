@@ -79,6 +79,7 @@ defmodule DealAgent.MixProject do
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind deal_agent", "esbuild deal_agent"],
       "assets.deploy": [
+        "compile",
         "tailwind deal_agent --minify",
         "esbuild deal_agent --minify",
         "phx.digest"

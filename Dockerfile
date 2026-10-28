@@ -21,7 +21,7 @@ RUN npm ci --prefix priv/carrefour_browser --omit=dev
 COPY priv priv
 COPY assets assets
 COPY lib lib
-RUN mix assets.setup && mix assets.deploy && mix compile
+RUN mix assets.setup && mix assets.deploy
 COPY config/runtime.exs config/
 COPY rel rel
 RUN mix release
