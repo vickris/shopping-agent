@@ -7,6 +7,7 @@ import {verifyCarrefourCart} from './carrefour_cart.mjs';
 import {verifyStoreCart} from './store_carts.mjs';
 import {fillCart} from './cart_flow.mjs';
 import {cartFailure} from './cart_errors.mjs';
+import {locationFailure,locationProgress} from './location_errors.mjs';
 import {selectAutomaticLocation} from './automatic_location.mjs';
 import {readLocation, confirmLocation, confirmationError} from './delivery_location.mjs';
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
@@ -61,20 +62,26 @@ async function assertLocation() {
   throw Error('location_changed');
 }
 
-async function locateAutomatically() {
+async function locateAutomatically(reload=false) {
   emit({type:'setup',status:'opening',message:'Selecting and confirming the nearby store automatically…'});
+  let failure;
   for(let attempt=0;attempt<2;attempt++) {
     try {
-      if(attempt)await navigate(setup.store==='carrefour'?roots.carrefour+'/search?keyword=milk':setup.store==='quickmart'?roots.quickmart+'shops/products/1/keyword-milk':roots.naivas+'search?term=milk');
-      const {confirmation,...identity}=await selectAutomaticLocation(page,setup.store,setup.coordinates,navigate);
+      if(attempt || reload) {
+        emit({type:'setup',status:'opening',stage:'loading_store',message:locationProgress('loading_store')});
+        try {await navigate(setup.store==='carrefour'?roots.carrefour+'/search?keyword=milk':setup.store==='quickmart'?roots.quickmart+'shops/products/1/keyword-milk':roots.naivas+'search?term=milk');}
+        catch(error){error.locationStage='loading_store';throw error;}
+      }
+      const {confirmation,...identity}=await selectAutomaticLocation(page,setup.store,setup.coordinates,navigate,stage=>emit({type:'setup',status:'opening',stage,message:locationProgress(stage)}));
       confirmed=identity;
       emit({type:'confirmed',location:{area:setup.area,...identity,confirmation}});
       return;
     } catch(error) {
+      failure=locationFailure(setup.store,error);
       if(onError)await onError(error);
     }
   }
-  emit({type:'setup',status:'unavailable',message:'The store could not confirm delivery near you automatically. Other stores can continue; retry this store automatically when available.'});
+  emit({type:'setup',status:'unavailable',...failure});
 }
 
 async function pause(message) {
@@ -109,7 +116,7 @@ input.on('line',async line=>{
   busy=true;
   try {
     if(message.action==='locate' && setup.coordinates && !confirmed) {
-      await locateAutomatically();
+      await locateAutomatically(true);
     } else if(message.action==='confirm') {
       const selected=await confirmLocation(page,setup.store,setup.area,initialIdentity,navigate);
       const {confirmation,...identity}=selected;
@@ -169,7 +176,11 @@ try {
   const context=await browser.newContext(contextOptions);
   if(point)await context.grantPermissions(['geolocation'],{origin: new URL(roots[setup.store]).origin});
   page=await context.newPage();
-  await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : roots.naivas+'search?term=milk');
+  if(point)emit({type:'setup',status:'opening',stage:'loading_store',message:locationProgress('loading_store')});
+  for(let attempt=0;attempt<2;attempt++) {
+    try {await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : roots.naivas+'search?term=milk');break;}
+    catch(error){if(attempt===1){error.locationStage='loading_store';throw error;}}
+  }
   try { initialIdentity=await identity(true); } catch {}
   if(onSetup)await onSetup(page);
   if(point) {
@@ -179,7 +190,16 @@ try {
   emit({type:'setup',status:'awaiting_input',message:setup.store==='naivas'?'You can try selecting the address in Naivas. If its map does not update, choose Use this area for Naivas in the app to proceed with delivery unverified.':'Select your delivery area in this store window. For Quickmart press Continue after choosing the address; the selected branch will open automatically when you confirm. Confirm here only when the store accepts delivery to your area.'});
   }
   starting=false;
-} catch(error) {if(onError)await onError(error);emit({type:'setup_error',message:error.name==='TimeoutError'?'The store took too long to load. Retry delivery setup.':'The store browser could not open. Check the installed browser runtime and connection, then retry.'});emit({type:'closed'});await browser?.close();process.exit(1);}
+} catch(error) {
+  if(onError)await onError(error);
+  if(setup.coordinates && page && browser?.isConnected()) {
+    starting=false;
+    emit({type:'setup',status:'unavailable',...locationFailure(setup.store,error)});
+  } else {
+    emit({type:'setup_error',message:error.name==='TimeoutError'?'The store took too long to load. Retry delivery setup.':'The store browser could not open. Check the installed browser runtime and connection, then retry.'});
+    emit({type:'closed'});await browser?.close();process.exit(1);
+  }
+}
 
 }
 if (process.argv[1] && realpathSync(process.argv[1])===fileURLToPath(import.meta.url)) {

@@ -30,15 +30,60 @@ test('homepage hook requests browser location once and sends only coordinates', 
   });
 });
 
-test('Carrefour resolves its own map address and confirms through the UI', () => fixture('https://www.carrefour.ke/', `
+const carrefourFixture=`
   <header><button onclick="document.querySelector('#address').hidden=false">Westlands<img src="Caret_Down_Arrow_for_address_location.svg"></button></header>
   <section id="address" hidden><input id="pac-input-add-address" class="pac-target-input"><div class="pac-item" onclick="window.wrongLocation=true">Far Road, Kenya</div><div class="pac-item" onclick="document.querySelector('#address').hidden=true;document.querySelector('#confirm').hidden=false;document.querySelector('#cookie').hidden=false">Nearby Road, Kenya</div></section>
   <div role="dialog" aria-label="Confirm delivery location" id="confirm" hidden><button onclick="document.querySelector('header button').firstChild.textContent='Nearby Road, Kenya';document.querySelector('#confirm').hidden=true">Yes, deliver to this location</button></div>
   <div id="cookie" hidden style="position:fixed;inset:0;z-index:9999;background:white"><button onclick="document.querySelector('#cookie').hidden=true">Accept All Cookies</button></div>
-  <script>window.google={maps:{Geocoder:class {async geocode(request){const far=request.address?.includes('Far');return {results:[{formatted_address:'Nearby Road, Kenya',types:['route'],geometry:{location:{lat:()=>far?-1.2:-1.367,lng:()=>far?36.8:36.936}}}]}}}}};</script>`, async page => {
+  <script>window.google={maps:{Geocoder:class {async geocode(request){const far=request.address?.includes('Far');return {results:[{formatted_address:'Nearby Road, Kenya',types:['route'],geometry:{location:{lat:()=>far?-1.2:-1.367,lng:()=>far?36.8:36.936}}}]}}}}};</script>`;
+
+test('Carrefour resolves its own map address and confirms through the UI', () => fixture('https://www.carrefour.ke/', carrefourFixture, async page => {
     assert.equal((await selectAutomaticLocation(page, 'carrefour', point)).confirmation, 'geolocation');
     assert.equal(await page.locator('#pac-input-add-address').inputValue(), 'Nearby Road, Kenya');
     assert.equal(await page.evaluate(() => Boolean(window.wrongLocation)), false);
+}));
+
+test('Carrefour falls back from an unmatched premise to a nearby street',()=>fixture('https://www.carrefour.ke/',carrefourFixture,async page=>{
+  await page.evaluate(()=>{
+    const Original=google.maps.Geocoder;
+    google.maps.Geocoder=class extends Original {async geocode(request){
+      const response=await super.geocode(request);
+      if(request.location)return {results:[{...response.results[0],formatted_address:'Unmatched Premise',types:['premise']},response.results[0]]};
+      if(document.querySelector('input').value==='Unmatched Premise')response.results[0].geometry.location={lat:()=>-1.2,lng:()=>36.8};
+      return response;
+    }};
+  });
+  assert.equal((await selectAutomaticLocation(page,'carrefour',point)).confirmation,'geolocation');
+  assert.equal(await page.locator('input').inputValue(),'Nearby Road, Kenya');
+}));
+
+test('Carrefour supports a plus-code address when no street result is available',()=>fixture('https://www.carrefour.ke/',carrefourFixture,async page=>{
+  await page.evaluate(()=>{
+    const Original=google.maps.Geocoder;
+    google.maps.Geocoder=class extends Original {async geocode(request){const response=await super.geocode(request);if(request.location){response.results[0].formatted_address='6WPH+FP Syokimau, Kenya';response.results[0].types=['plus_code'];}return response;}};
+  });
+  assert.equal((await selectAutomaticLocation(page,'carrefour',point)).confirmation,'geolocation');
+  assert.equal(await page.locator('input').inputValue(),'6WPH+FP Syokimau, Kenya');
+}));
+
+test('Carrefour dismisses a cookie banner that appears during address lookup',()=>fixture('https://www.carrefour.ke/',carrefourFixture,async page=>{
+  await page.evaluate(()=>{
+    const Original=google.maps.Geocoder;
+    google.maps.Geocoder=class extends Original {async geocode(request){if(request.location)document.querySelector('#cookie').hidden=false;return super.geocode(request);}};
+  });
+  assert.equal((await selectAutomaticLocation(page,'carrefour',point)).confirmation,'geolocation');
+}));
+
+test('Carrefour rechecks suggestions replaced while their addresses are being verified',()=>fixture('https://www.carrefour.ke/',carrefourFixture,async page=>{
+  await page.evaluate(()=>{
+    document.querySelectorAll('.pac-item')[1].textContent='Old Nearby Road, Kenya';
+    const Original=google.maps.Geocoder;
+    google.maps.Geocoder=class extends Original {async geocode(request){
+      if(request.address?.startsWith('Old Nearby'))document.querySelectorAll('.pac-item')[1].textContent='Nearby Road, Kenya';
+      return super.geocode(request);
+    }};
+  });
+  assert.equal((await selectAutomaticLocation(page,'carrefour',point)).confirmation,'geolocation');
 }));
 
 test('Quickmart uses native GPS and the resolver-selected branch', () => fixture('https://www.quickmart.co.ke/home', `
@@ -108,6 +153,16 @@ test('Naivas can report the abbreviated street of a geocoded premise',()=>fixtur
     save.setAttribute('onclick',save.getAttribute('onclick').replace("textContent='Nearby Road, Kenya'","textContent='Nearby Road'"));
   });
   assert.equal((await selectAutomaticLocation(page,'naivas',point)).label,'Nearby Road');
+}));
+
+test('Naivas accepts a short saved neighbourhood name after verifying map coordinates',()=>fixture('https://www.naivas.online/',naivasFixture(),async page=>{
+  await page.evaluate(()=>{
+    const Original=google.maps.Geocoder;
+    google.maps.Geocoder=class extends Original {async geocode(request){const response=await super.geocode(request);if(request.location)response.results[0].formatted_address='Ruaka, Kenya';return response;}};
+    const save=Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Save Address');
+    save.setAttribute('onclick',save.getAttribute('onclick').replace("textContent='Nearby Road, Kenya'","textContent='Ruaka'"));
+  });
+  assert.equal((await selectAutomaticLocation(page,'naivas',point)).label,'Ruaka');
 }));
 
 test('Naivas never marks its unchanged default location as automatically confirmed',()=>fixture('https://www.naivas.online/',naivasFixture(false),async page=>{

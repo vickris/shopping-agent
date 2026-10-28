@@ -150,6 +150,8 @@ defmodule DealAgentWeb.DeliveryLocationTest do
 
   test "an automatic store failure can retry without asking for store confirmation", %{conn: conn} do
     {:ok, view, _} = live(conn, "/")
+    view |> form("#chat-form", chat: %{message: "2 litres of milk"}) |> render_submit()
+    render_async(view, 1000)
 
     render_hook(view, "location-detected", %{
       "latitude" => -1.367,
@@ -158,6 +160,8 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     })
 
     wait_until(fn -> has_element?(view, "#naivas-delivery", "Location confirmed") end)
+
+    render_async(view, 1000)
 
     {id, session} =
       Enum.find(:sys.get_state(DealAgent.Delivery.Sessions), fn {_, s} ->
@@ -170,12 +174,19 @@ defmodule DealAgentWeb.DeliveryLocationTest do
       "message" => "The store could not confirm automatically."
     }
 
+    view |> form("form[id^='naivas-filter-']", %{query: "slow"}) |> render_submit()
     send(DealAgent.Delivery.Sessions, {session.port, {:data, {:eol, Jason.encode!(event)}}})
     retry = "#naivas-delivery button[phx-value-action='locate']"
     wait_until(fn -> has_element?(view, retry, "Retry automatically") end)
     refute has_element?(view, "#naivas-delivery button[phx-value-action='confirm']")
     assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed == false
-    view |> element(retry) |> render_click()
+    assert has_element?(view, ".naivas-error", "The store could not confirm automatically.")
+    render_async(view, 1000)
+    refute has_element?(view, ".naivas-error", "Waiting for")
+    wait_until(fn -> is_nil(:sys.get_state(DealAgent.Delivery.Sessions)[id].busy) end)
+    view |> form("form[id^='naivas-filter-']", %{query: "milk"}) |> render_submit()
+    assert has_element?(view, ".naivas-error", "The store could not confirm automatically.")
+    view |> element("button[id^='naivas-retry-location-']") |> render_click()
     wait_until(fn -> has_element?(view, "#naivas-delivery", "Location confirmed") end)
     assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed
     refute has_element?(view, retry)

@@ -168,3 +168,15 @@ Additional browser checks:
 
 Cart handoff browser checks:
 `node --test priv/carrefour_browser/browser_handoff.test.mjs`.
+
+Automatic location failures now show a bounded explanation of the failed step
+(website load, map load, address lookup, saving or verification) in each affected
+search cell, with **Retry location** alongside it. The retry reuses only that
+store's session; other stores keep their results. `supermarket.location.failed`
+logs include `supermarket`, `location_stage` and `error_type`, never addresses,
+coordinates or raw browser/provider errors. Address lookup tries up to three
+reverse-geocoded alternatives, including plus codes, while keeping the 2 km
+candidate check. Naivas supports short saved area names such as Ruaka after
+checking the map coordinates and persistence.
+The lookup rechecks autocomplete rows if the store replaces them during address
+verification, and dismisses late cookie overlays before selecting a suggestion.

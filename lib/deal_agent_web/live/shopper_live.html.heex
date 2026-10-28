@@ -428,7 +428,9 @@
                   <%= case Map.get(results, item.id) do %>
                     <% :loading -> %>
                       <p class={"#{store.id}-loading text-sm text-gray-500"} role="status">
-                        Searching {store.label}... (queued if the store is busy)
+                        {if get_in(@delivery_sessions, [store.id, :status]) == "opening",
+                          do: get_in(@delivery_sessions, [store.id, :message]),
+                          else: "Searching #{store.label}… (queued if the store is busy)"}
                       </p>
                     <% {:ok, %{products: []}} -> %>
                       <p class={"#{store.id}-empty text-sm text-gray-600"}>
@@ -500,6 +502,19 @@
                       <p class={"#{store.id}-error text-sm text-red-700"} role="alert">
                         {search_error_message(reason, store)}
                       </p>
+                      <button
+                        :if={
+                          get_in(@delivery_sessions, [store.id, :status]) == "unavailable" and
+                            get_in(@delivery_sessions, [store.id, :source]) == :browser_location
+                        }
+                        id={"#{store.id}-retry-location-#{item.id}"}
+                        phx-click="delivery-window"
+                        phx-value-action="locate"
+                        phx-value-store={store.id}
+                        class="mt-2 rounded bg-blue-600 px-3 py-2 text-sm text-white"
+                      >
+                        Retry location
+                      </button>
                       <a
                         href={
                           store_search_url(

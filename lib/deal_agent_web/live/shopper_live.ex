@@ -568,7 +568,8 @@ defmodule DealAgentWeb.ShopperLive do
   end
 
   def handle_async({:search_store, store_id, item_id, session_id}, {:exit, _}, socket) do
-    if get_in(socket.assigns.delivery_sessions, [store_id, :id]) == session_id do
+    if get_in(socket.assigns.delivery_sessions, [store_id, :id]) == session_id and
+         get_in(socket.assigns.delivery_sessions, [store_id, :status]) == "confirmed" do
       {:noreply, put_search_result(socket, store_id, item_id, {:error, :location_unconfirmed})}
     else
       {:noreply, socket}
@@ -800,7 +801,7 @@ defmodule DealAgentWeb.ShopperLive do
                store.results_key,
                Map.new(
                  socket.assigns.shopping_list.items,
-                 &{&1.id, {:error, :location_unconfirmed}}
+                 &{&1.id, {:error, {:location_setup_failed, message}}}
                )
              )
              |> location_progress()}
@@ -972,9 +973,16 @@ defmodule DealAgentWeb.ShopperLive do
     if (is_nil(profile) or profile.status != "confirmed") and
          Application.get_env(:deal_agent, :require_delivery_location, true) do
       result =
-        if profile && profile.status == "opening",
-          do: :loading,
-          else: {:error, :location_unconfirmed}
+        cond do
+          profile && profile.status == "opening" ->
+            :loading
+
+          profile && profile.status == "unavailable" ->
+            {:error, {:location_setup_failed, profile.message}}
+
+          true ->
+            {:error, :location_unconfirmed}
+        end
 
       assign(
         socket,
@@ -1130,6 +1138,9 @@ defmodule DealAgentWeb.ShopperLive do
       |> assign(store.selections_key, Map.take(acc.assigns[store.selections_key], item_ids))
     end)
   end
+
+  defp search_error_message({:location_setup_failed, message}, _) when is_binary(message),
+    do: message
 
   defp search_error_message(reason, _) when reason in [:location_unconfirmed, :location_changed],
     do:

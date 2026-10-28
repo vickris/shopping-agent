@@ -6,6 +6,7 @@ defmodule DealAgent.Logging.JSONFormatter do
     :search_event,
     :search_id,
     :supermarket,
+    :location_stage,
     :queue_depth,
     :queue_wait_ms,
     :product_count,

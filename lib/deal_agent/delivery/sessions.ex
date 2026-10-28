@@ -1,6 +1,7 @@
 defmodule DealAgent.Delivery.Sessions do
   @moduledoc "Owns temporary location-confirmed store browsers. Cookies stay in the browser process."
   use GenServer
+  require Logger
   @stores ~w(carrefour quickmart naivas)
   def start_link(_), do: GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
 
@@ -195,6 +196,22 @@ defmodule DealAgent.Delivery.Sessions do
           end
 
         %{"type" => "setup", "status" => "unavailable"} ->
+          stage =
+            if event["stage"] in ~w(loading_store opening_location loading_map reverse_geocoding autocomplete candidate_geocoding selecting_address saving_location verifying_location retaining_location),
+              do: event["stage"],
+              else: "unknown"
+
+          code =
+            if event["error"] in ~w(map_service_rejected location_timeout location_not_saved address_not_found location_unconfirmed map_timeout location_setup_failed),
+              do: event["error"],
+              else: "location_setup_failed"
+
+          Logger.warning("supermarket.location.failed",
+            supermarket: session.store,
+            location_stage: stage,
+            error_type: code
+          )
+
           send(session.owner, {:delivery_event, id, event})
           {:noreply, Map.put(sessions, id, %{finish_location(session) | confirmed: false})}
 
