@@ -102,8 +102,9 @@ test('Quickmart uses native GPS and the resolver-selected branch', () => fixture
 function naivasFixture(save=true) {
   return `
   <span class="geoLocation">Nairobi, Kenya</span>
-  <button data-drawer-show="address_drawer" onclick="document.querySelector('#address_drawer').hidden=false">Change</button>
+  <button data-drawer-show="address_drawer" onclick="document.querySelector('#address_drawer').hidden=false;document.querySelector('#address_drawer').setAttribute('role','dialog')">Change</button>
   <div id="address_drawer" hidden>
+    <button id="close-address-drawer" onclick="document.querySelector('#address_drawer').hidden=true;document.querySelector('#address_drawer').removeAttribute('role')">Close menu</button>
     <button onclick="document.querySelector('#form').hidden=false;document.querySelector('#address_drawer').setAttribute('role','dialog')">Add New Address</button>
     <div id="form" hidden><input id="address-input_map_drawer" class="pac-target-input">
     <div class="pac-item" onclick="window.selected=true">Nearby Road, Kenya</div>
@@ -163,6 +164,32 @@ test('Naivas accepts a short saved neighbourhood name after verifying map coordi
     save.setAttribute('onclick',save.getAttribute('onclick').replace("textContent='Nearby Road, Kenya'","textContent='Ruaka'"));
   });
   assert.equal((await selectAutomaticLocation(page,'naivas',point)).label,'Ruaka');
+}));
+
+test('Naivas verifies a saved estate alias geographically without saving a second address',()=>fixture('https://www.naivas.online/',naivasFixture(),async page=>{
+  await page.evaluate(()=>{
+    const Original=google.maps.Geocoder;
+    google.maps.Geocoder=class extends Original {async geocode(request){const response=await super.geocode(request);if(request.location)response.results[0].formatted_address='Destinations Kenya Safari, Pridelands, Kenya';return response;}};
+    const save=Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Save Address');
+    save.setAttribute('onclick',"window.saves=(window.saves||0)+1;"+save.getAttribute('onclick').replaceAll('Nearby Road, Kenya','Greatwall Gardens,'));
+  });
+  const result=await selectAutomaticLocation(page,'naivas',point,async()=>{
+    assert.equal(await page.evaluate(()=>window.saves),1);
+    await page.reload();
+  });
+  assert.equal(result.label,'Greatwall Gardens,');
+  assert.equal(result.confirmation,'geolocation');
+  assert.equal(await page.locator('#address_drawer').isVisible(),false);
+}));
+
+test('Naivas rejects a saved alias that resolves outside the selected area',()=>fixture('https://www.naivas.online/',naivasFixture(),async page=>{
+  await page.evaluate(()=>{
+    const Original=google.maps.Geocoder;
+    google.maps.Geocoder=class extends Original {async geocode(request){const response=await super.geocode(request);if(request.address==='Distant Estate')response.results[0].geometry.location={lat:()=>-1.2,lng:()=>36.8};return response;}};
+    const save=Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Save Address');
+    save.setAttribute('onclick',save.getAttribute('onclick').replaceAll('Nearby Road, Kenya','Distant Estate'));
+  });
+  await assert.rejects(selectAutomaticLocation(page,'naivas',point),/location_not_saved/);
 }));
 
 test('Naivas never marks its unchanged default location as automatically confirmed',()=>fixture('https://www.naivas.online/',naivasFixture(false),async page=>{

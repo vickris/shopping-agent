@@ -180,3 +180,9 @@ candidate check. Naivas supports short saved area names such as Ruaka after
 checking the map coordinates and persistence.
 The lookup rechecks autocomplete rows if the store replaces them during address
 verification, and dismisses late cookie overlays before selecting a suggestion.
+
+Naivas may save an estate alias (for example, Greatwall Gardens in Pridelands)
+instead of the landmark selected in autocomplete. When the names differ, the
+runner reopens the store map without saving another address, verifies the saved
+alias within 2 km of the supplied coordinates, closes the unsaved form and
+checks persistence. No estate names or coordinates are hardcoded into the app.

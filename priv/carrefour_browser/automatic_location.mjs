@@ -9,18 +9,9 @@ export async function selectAutomaticLocation(page, store, point, navigate, onPr
   step('opening_location');
   if (store === 'naivas') {
     await page.getByRole('button', {name:'Close without accepting cookies',exact:true}).click({timeout:2500}).catch(()=>{});
-    await page.waitForFunction(()=>Boolean(window.Livewire && window.Alpine),null,{timeout:15000});
-    await page.locator('button[data-drawer-show="address_drawer"]:visible').first().click();
-    const addressInput=page.locator('#address-input_map_drawer:visible');
-    const add=page.getByRole('button',{name:'Add New Address',exact:true});
-    await addressInput.or(add).first().waitFor({state:'visible',timeout:15000});
-    if(!await addressInput.isVisible()) {
-      try {await add.click({timeout:10000,noWaitAfter:true});}
-      catch(error) {if(!await addressInput.isVisible())throw error;}
-    }
     step('loading_map');
-    const input=page.locator('#address-input_map_drawer.pac-target-input:visible');
-    await input.waitFor({state:'visible',timeout:20000});
+    const input=await openNaivasAddressInput(page);
+    const addressInput=page.locator('#address-input_map_drawer:visible');
     await selectNearbyAddress(page,point,input,step);
     step('saving_location');
     // The map callback commits coordinates asynchronously. Saving before those
@@ -37,9 +28,7 @@ export async function selectAutomaticLocation(page, store, point, navigate, onPr
     await assertNearbyAddress(page,expectedAddress,point);
     await page.getByRole('button',{name:'Save Address',exact:true}).click();
     await addressInput.waitFor({state:'hidden',timeout:15000});
-    const openDrawer=page.locator('#address_drawer[role="dialog"]:not([aria-hidden="true"])');
-    if(await openDrawer.isVisible())await page.locator('#close-address-drawer').click();
-    await openDrawer.waitFor({state:'hidden',timeout:5000});
+    await closeNaivasAddressDrawer(page);
     step('verifying_location');
     const selected=await readLocation(page,store);
     // Saving can reload the page and unload its map SDK. Compare the saved
@@ -51,7 +40,15 @@ export async function selectAutomaticLocation(page, store, point, navigate, onPr
     const reported=normalize(selected.label);
     const parts=expectedAddress.split(',');
     const labels=parts.slice(0,2).map((_,index)=>normalize(parts.slice(index).join(',')));
-    if(!reported || /^nairobi(?:,kenya)?$/.test(reported) || !labels.some(label=>label.startsWith(reported)))throw Error('location_not_saved');
+    if(!reported || /^nairobi(?:,kenya)?$/.test(reported))throw Error('location_not_saved');
+    if(!labels.some(label=>label.startsWith(reported))) {
+      // Naivas can reverse-geocode the same pin to an estate name rather than
+      // the selected landmark. Reopen its map without saving another address,
+      // verify that alias geographically, then close the unsaved form.
+      await openNaivasAddressInput(page);
+      await assertNearbyAddress(page,selected.label,point);
+      await closeNaivasAddressDrawer(page);
+    }
     step('retaining_location');
     if(navigate)await navigate('https://www.naivas.online/search?term=milk');
     const retained=await readLocation(page,store);
@@ -92,6 +89,28 @@ export async function selectAutomaticLocation(page, store, point, navigate, onPr
   const location = await confirmLocation(page, store, 'Near you', undefined, navigate);
   return {...location, confirmation: 'geolocation'};
   } catch(error) {error.locationStage ||= stage;throw error;}
+}
+
+async function openNaivasAddressInput(page) {
+    await page.waitForFunction(()=>Boolean(window.Livewire && window.Alpine),null,{timeout:15000});
+    await page.locator('button[data-drawer-show="address_drawer"]:visible').first().click();
+    const addressInput=page.locator('#address-input_map_drawer:visible');
+    const add=page.getByRole('button',{name:'Add New Address',exact:true});
+    await addressInput.or(add).first().waitFor({state:'visible',timeout:15000});
+    if(!await addressInput.isVisible()) {
+      try {await add.click({timeout:10000,noWaitAfter:true});}
+      catch(error) {if(!await addressInput.isVisible())throw error;}
+    }
+    const input=page.locator('#address-input_map_drawer.pac-target-input:visible');
+    await input.waitFor({state:'visible',timeout:20000});
+    await page.waitForFunction(()=>typeof window.google?.maps?.Geocoder==='function',null,{timeout:15000});
+    return input;
+}
+
+async function closeNaivasAddressDrawer(page) {
+    const openDrawer=page.locator('#address_drawer[role="dialog"]:not([aria-hidden="true"])');
+    if(await openDrawer.isVisible())await page.locator('#close-address-drawer').click();
+    await openDrawer.waitFor({state:'hidden',timeout:5000});
 }
 
 async function selectNearbyAddress(page,point,input,step) {
@@ -172,13 +191,13 @@ async function dismissAddressCookies(page) {
 }
 
 async function assertNearbyAddress(page,address,point) {
-  const candidates=await page.evaluate(async address=>{
+  const candidates=await page.evaluate(async ({address,point})=>{
     const {results}=await Promise.race([
-      new google.maps.Geocoder().geocode({address,region:'KE'}),
+      new google.maps.Geocoder().geocode({address,region:'KE',bounds:{north:point.latitude+0.05,south:point.latitude-0.05,east:point.longitude+0.05,west:point.longitude-0.05}}),
       new Promise((_,reject)=>setTimeout(()=>reject(Error('map_timeout')),10000))
     ]);
     return results.map(r=>({latitude:r.geometry.location.lat(),longitude:r.geometry.location.lng()}));
-  },address);
+  },{address,point});
   if(!candidates.some(candidate=>Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude) && distanceMeters(point,candidate)<=2000))throw Error('location_not_saved');
 }
 
