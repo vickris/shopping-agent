@@ -11,7 +11,7 @@ defmodule DealAgent.Delivery.Sessions do
     end
   end
 
-  def command(owner, id, action) when action in ~w(open close confirm resume),
+  def command(owner, id, action) when action in ~w(open close confirm resume locate),
     do: GenServer.call(__MODULE__, {:command, owner, id, action})
 
   def search(owner, id, store, query),
@@ -53,6 +53,7 @@ defmodule DealAgent.Delivery.Sessions do
               store: store,
               ref: Process.monitor(owner),
               confirmed: false,
+              automatic: not is_nil(point),
               busy: nil,
               timer: Process.send_after(self(), {:expiry, id}, 1_800_000)
             }
@@ -69,6 +70,16 @@ defmodule DealAgent.Delivery.Sessions do
     case sessions[id] do
       %{owner: ^owner} when action == "close" ->
         {:reply, :ok, close_session(sessions, id)}
+
+      %{owner: ^owner, automatic: true} when action == "confirm" ->
+        {:reply, {:error, :automatic_location}, sessions}
+
+      %{owner: ^owner, automatic: true, confirmed: false, busy: nil} = session
+      when action == "locate" ->
+        Port.command(session.port, Jason.encode!(%{action: action}) <> "\n")
+        token = make_ref()
+        timer = Process.send_after(self(), {:location_timeout, id, token}, 180_000)
+        {:reply, :ok, Map.put(sessions, id, %{session | busy: {:locating, timer, token}})}
 
       %{owner: ^owner, confirmed: true} when action == "confirm" ->
         {:reply, {:error, :already_confirmed}, sessions}
@@ -183,8 +194,13 @@ defmodule DealAgent.Delivery.Sessions do
               {:noreply, sessions}
           end
 
+        %{"type" => "setup", "status" => "unavailable"} ->
+          send(session.owner, {:delivery_event, id, event})
+          {:noreply, Map.put(sessions, id, %{finish_location(session) | confirmed: false})}
+
         %{"type" => "confirmed", "location" => location} ->
           send(session.owner, {:delivery_event, id, event})
+          session = finish_location(session)
           {:noreply, Map.put(sessions, id, %{session | confirmed: is_map(location)})}
 
         %{"type" => "invalidated"} ->
@@ -230,6 +246,13 @@ defmodule DealAgent.Delivery.Sessions do
     end
   end
 
+  def handle_info({:location_timeout, id, token}, sessions) do
+    case sessions[id] do
+      %{busy: {:locating, _, ^token}} -> {:noreply, close_session(sessions, id)}
+      _ -> {:noreply, sessions}
+    end
+  end
+
   def handle_info({:window_timeout, id, token}, sessions) do
     case sessions[id] do
       %{busy: {:window, _, _, ^token}} -> {:noreply, close_session(sessions, id)}
@@ -264,6 +287,13 @@ defmodule DealAgent.Delivery.Sessions do
   def terminate(_, sessions),
     do: Enum.each(sessions, fn {_, s} -> if Port.info(s.port), do: Port.close(s.port) end)
 
+  defp finish_location(%{busy: {:locating, timer, _}} = session) do
+    Process.cancel_timer(timer)
+    %{session | busy: nil}
+  end
+
+  defp finish_location(session), do: session
+
   defp close_session(sessions, id) do
     case Map.pop(sessions, id) do
       {nil, sessions} ->
@@ -279,6 +309,9 @@ defmodule DealAgent.Delivery.Sessions do
             Process.cancel_timer(timer)
             Process.demonitor(monitor, [:flush])
             GenServer.reply(from, {:error, :location_unconfirmed})
+
+          {:locating, timer, _} ->
+            Process.cancel_timer(timer)
 
           {:window, _, timer, _} ->
             Process.cancel_timer(timer)

@@ -4,7 +4,8 @@ const emit=event=>console.log(JSON.stringify(event));
 let setup, confirmations=0;
 input.on('line',line=>{
  const m=JSON.parse(line);
- if(!setup){setup=m;if(m.coordinates){emit({type:'confirmed',location:{area:m.area,label:'Nearby service area',confirmation:m.store==='naivas'?'user_override':'geolocation',...(m.store==='quickmart'?{branch_id:'73',branch:'Nearby Quickmart'}:{})}});return;}emit({type:'setup',status:'awaiting_input',message:'Select the store delivery location, then confirm.'});return;}
+ if(!setup){setup=m;if(m.coordinates){if(m.area==='Automatic retry'){emit({type:'setup',status:'unavailable',message:'Store location could not be confirmed automatically.'});return;}emit({type:'confirmed',location:{area:m.area,label:'Nearby service area',confirmation:'geolocation',...(m.store==='quickmart'?{branch_id:'73',branch:'Nearby Quickmart'}:{})}});return;}emit({type:'setup',status:'awaiting_input',message:'Select the store delivery location, then confirm.'});return;}
+ if(m.action==='locate')setTimeout(()=>emit({type:'confirmed',location:{area:setup.area,label:'Nearby service area',confirmation:'geolocation'}}),100);
  if(m.action==='open'){emit({type:'window',status:'opening'});setTimeout(()=>emit(setup.area==='Window failure'?{type:'window',status:'failed',message:'The original basket is retained.'}:{type:'window',status:'opened'}),100);}
  if(m.action==='close')process.exit(0);
  if(m.action==='confirm' && setup.area==='Retry' && confirmations++===0){setTimeout(()=>emit({type:'confirmation_failed',message:'Save the store delivery address, then try again.'}),100);return;}

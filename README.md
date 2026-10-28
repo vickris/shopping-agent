@@ -89,12 +89,11 @@ or delivery requirements at checkout still apply.
 
 ## Confirmed delivery locations
 
-Choose **Use my location** to select store service areas automatically, or enter
-an area (for example, Syokimau) in a store's delivery card and choose
-**Set delivery location** for manual setup. Select the delivery location on the
-supermarket website; for Quickmart, press Continue after choosing the address.
-Confirmation opens the selected branch automatically. Return to the app and click **I confirmed delivery in the store** once the store accepts it.
-The card displays the location reported by the website.
+On entry, allow the browser location prompt. Each store selects and confirms a
+nearby delivery area in a headless session. Build your list, select products and
+choose **Shop now**, then **Continue to checkout** below the chosen store total.
+There is no per-store confirmation step in this automatic flow. Optional manual
+location settings are tucked under **Store status and optional location settings**.
 
 Searches and cart preparation reuse that store's temporary browser context,
 including its location and Quickmart branch. Cookies remain in memory in the
@@ -104,8 +103,8 @@ a detected location change stops the operation rather than searching a default
 area. Once a cart is prepared, the window is reserved for reviewing that basket.
 
 This flow currently needs the local desktop store window. Sessions end when the
-shopping page disconnects, the store window closes, or after 30 minutes. Reconfirm
-the location after reopening the shopping page. The store's visible location
+shopping page disconnects, the store window closes, or after 30 minutes. Location
+is resolved again after reopening the shopping page. The store's visible location
 label may be broader than the selected area; final address, delivery availability,
 fees and payment remain subject to the supermarket's checkout checks.
 
@@ -118,7 +117,7 @@ Browser location regression tests use local HTML fixtures (no store requests):
 `node --test priv/carrefour_browser/delivery_location.test.mjs`. Install the
 project's Chromium browser first using the browser package's install command.
 
-Naivas has an explicit map exception: **Use this area for Naivas** accepts the
+Only the optional manual setup retains Naivas's explicit map exception: **Use this area for Naivas** accepts the
 shopper's supplied area even when Naivas keeps its original location label. The
 app marks this **Area supplied · delivery unverified**, and search metadata
 records `user_override`. Search and cart still reuse the same browser session;
@@ -128,26 +127,29 @@ and Quickmart retain their location checks.
 
 ## Find stores using browser location
 
-Choose **Use my location** on the homepage and allow the browser prompt. Location
-access requires HTTPS or localhost. The app takes one location reading per click;
-it does not track movement or save coordinates to browser storage. Coordinates
-are used only in temporary supermarket browser sessions and are filtered from
-Phoenix parameter logs. The page explains sharing with the stores and their map
-providers before requesting permission.
+The homepage requests one location reading on entry; **Refresh my location**
+requests another. Browser permission is required and cannot be granted by the
+assistant. Location access requires HTTPS or localhost. The app does not track
+movement or save coordinates to browser storage. Coordinates are used only in
+temporary supermarket sessions and are filtered from Phoenix parameter logs.
 
 Quickmart uses its own current-location and closest-branch resolver. Carrefour
 resolves an address with its map provider and selects the corresponding delivery
 area; autocomplete matches more than 2 km from the supplied point are rejected.
 These are store service areas, not a distance-ranked directory of all physical
-supermarkets. Naivas retains the explicitly unverified map exception. Final
-coverage, delivery address and fees remain the store's checkout decision.
+supermarkets. Naivas opens Add New Address, chooses a nearby map suggestion and
+saves it, then checks that the saved location persists across navigation. Its
+default Nairobi label is never accepted as GPS confirmation. Each store gets one
+automatic location retry. A store that still fails stays unavailable while the
+others continue, with **Retry automatically** available in optional settings.
+Final coverage, delivery address and fees remain the store's checkout decision.
 
 Existing searches and selections are cleared when the location changes. A live
 cart must be closed first so changing location cannot interrupt checkout. If
 permission is denied or a store cannot resolve the location, manual area entry
 remains available; a default branch is never silently marked GPS-confirmed.
 Search and cart preparation start headlessly. After a verified basket is ready,
-**Open filled cart** below that supermarket's total opens its guest session in a
+**Continue to checkout** below that supermarket's total opens its guest session in a
 visible browser on the computer running this app. The handoff copies cookies,
 local storage, IndexedDB and session storage only in Node process memory; it
 checks the delivery location, product IDs, quantities and prices before replacing

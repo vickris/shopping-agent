@@ -1,4 +1,4 @@
-// Ask once per click. No watchPosition, local storage or console logging.
+// Resolve once on entry, then only on an explicit refresh. Never persist coordinates.
 export const BrowserLocation = {
   mounted() {
     this.alive = true
@@ -29,6 +29,7 @@ export const BrowserLocation = {
       }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 60000})
     }
     this.el.querySelector("[data-use-location]").addEventListener("click", this.requestLocation)
+    if (this.el.hasAttribute("data-auto-location")) this.requestLocation()
   },
   destroyed() {
     this.alive = false

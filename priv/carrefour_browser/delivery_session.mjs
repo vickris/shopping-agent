@@ -61,7 +61,24 @@ async function assertLocation() {
   throw Error('location_changed');
 }
 
+async function locateAutomatically() {
+  emit({type:'setup',status:'opening',message:'Selecting and confirming the nearby store automatically…'});
+  for(let attempt=0;attempt<2;attempt++) {
+    try {
+      if(attempt)await navigate(setup.store==='carrefour'?roots.carrefour+'/search?keyword=milk':setup.store==='quickmart'?roots.quickmart+'shops/products/1/keyword-milk':roots.naivas+'search?term=milk');
+      const {confirmation,...identity}=await selectAutomaticLocation(page,setup.store,setup.coordinates,navigate);
+      confirmed=identity;
+      emit({type:'confirmed',location:{area:setup.area,...identity,confirmation}});
+      return;
+    } catch(error) {
+      if(onError)await onError(error);
+    }
+  }
+  emit({type:'setup',status:'unavailable',message:'The store could not confirm delivery near you automatically. Other stores can continue; retry this store automatically when available.'});
+}
+
 async function pause(message) {
+  if(setup.coordinates)throw Error('location_unconfirmed');
   await showWindow();
   const continued=new Promise(resolve=>{resume=resolve;});
   emit({type:'cart',status:'awaiting_input',message,verified:false});
@@ -86,11 +103,14 @@ input.on('line',async line=>{
     } finally {busy=false;}
     return;
   }
+  if(message.action==='locate' && starting)return; // Initial setup will publish its result.
   if(message.action==='resume' && resume){const next=resume;resume=null;next();return;}
   if(busy){emit({type:'reply',id:message.id,error:'session_busy'});return;}
   busy=true;
   try {
-    if(message.action==='confirm') {
+    if(message.action==='locate' && setup.coordinates && !confirmed) {
+      await locateAutomatically();
+    } else if(message.action==='confirm') {
       const selected=await confirmLocation(page,setup.store,setup.area,initialIdentity,navigate);
       const {confirmation,...identity}=selected;
       confirmed=identity;
@@ -119,7 +139,7 @@ input.on('line',async line=>{
       }
       await assertLocation();
       const checkedNavigate=async url=>{await navigate(url);await assertLocation();};
-      emit({type:'cart',status:'preparing',message:setup.store==='naivas'?'Preparing your Naivas basket. Delivery to your supplied area must be checked in Naivas checkout.':'Preparing your basket at the confirmed delivery location.'});
+      emit({type:'cart',status:'preparing',message:setup.store==='naivas'&&!setup.coordinates?'Preparing your Naivas basket. Delivery to your supplied area must be checked in Naivas checkout.':'Preparing your basket at the selected delivery location.'});
       // Adapters must follow the current page after a paused browser handoff.
       const livePage=new Proxy({}, {get:(_,key)=>typeof page[key]==='function'?page[key].bind(page):page[key]});
       const result=await fillCart({page:livePage,plan:{...message.plan,delivery:confirmed},navigate:checkedNavigate,cents,pause,
@@ -153,15 +173,7 @@ try {
   try { initialIdentity=await identity(true); } catch {}
   if(onSetup)await onSetup(page);
   if(point) {
-    emit({type:'setup',status:'opening',message:'Finding the store serving your current location…'});
-    try {
-      const {confirmation,...identity}=await selectAutomaticLocation(page,setup.store,point,navigate);
-      confirmed=identity;
-      emit({type:'confirmed',location:{area:setup.area,...identity,confirmation}});
-    } catch(error) {
-      if(onError)await onError(error);
-      emit({type:'setup',status:'awaiting_input',message:'The store could not select a nearby service area automatically. No default location was accepted. Set an address in its window or close this session and enter an area manually.'});
-    }
+    await locateAutomatically();
   } else {
   await showWindow();
   emit({type:'setup',status:'awaiting_input',message:setup.store==='naivas'?'You can try selecting the address in Naivas. If its map does not update, choose Use this area for Naivas in the app to proceed with delivery unverified.':'Select your delivery area in this store window. For Quickmart press Continue after choosing the address; the selected branch will open automatically when you confirm. Confirm here only when the store accepts delivery to your area.'});

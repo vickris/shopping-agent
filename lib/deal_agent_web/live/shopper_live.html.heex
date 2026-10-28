@@ -44,13 +44,13 @@
     aria-labelledby="delivery-heading"
   >
     <h2 id="delivery-heading" class="text-lg font-semibold">Shop near you</h2>
-    <div id="browser-location" phx-hook="BrowserLocation" class="mt-3">
+    <div id="browser-location" phx-hook="BrowserLocation" data-auto-location class="mt-3">
       <button
         type="button"
         data-use-location
         class="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
       >
-        Use my location
+        Refresh my location
       </button>
       <p class="mt-2 text-sm text-gray-600">
         Allow location access to find the service area or nearby branch for each supermarket. Your coordinates are shared with Carrefour, Quickmart, Naivas and their map providers in temporary store sessions.
@@ -73,99 +73,121 @@
       {@location_message}
     </p>
     <p class="mt-2 text-sm text-gray-600">
-      You can also enter an area manually below. Searches and Shop now keep the same store location. Naivas delivery remains unverified while its map is unavailable.
+      We select and confirm each store’s location automatically, then keep it for search and checkout.
     </p>
-    <div class="mt-4 grid gap-4 md:grid-cols-3">
-      <div
-        :for={store <- @stores}
-        id={"#{store.id}-delivery"}
-        class="rounded-lg border border-gray-200 p-3"
-      >
-        <h3 class="font-semibold">{store.label}</h3>
-        <% profile = @delivery_sessions[store.id] %>
-        <%= if profile do %>
-          <p class="mt-1 text-sm font-medium">
-            {profile.area} · {cond do
-              profile.status == "opening" and Map.get(profile, :source) == :browser_location ->
-                "Finding nearby store"
+    <details class="mt-4">
+      <summary class="cursor-pointer text-sm text-gray-600">
+        Store status and optional location settings
+      </summary>
+      <div class="mt-4 grid gap-4 md:grid-cols-3">
+        <div
+          :for={store <- @stores}
+          id={"#{store.id}-delivery"}
+          class="rounded-lg border border-gray-200 p-3"
+        >
+          <h3 class="font-semibold">{store.label}</h3>
+          <% profile = @delivery_sessions[store.id] %>
+          <%= if profile do %>
+            <p class="mt-1 text-sm font-medium">
+              {profile.area} · {cond do
+                profile.status == "opening" and Map.get(profile, :source) == :browser_location ->
+                  "Finding nearby store"
 
-              profile.status != "confirmed" ->
-                "Confirmation needed"
+                profile.status != "confirmed" ->
+                  if(Map.get(profile, :source) == :browser_location,
+                    do: "Store unavailable",
+                    else: "Confirmation needed"
+                  )
 
-              Map.get(profile, :confirmation) == "user_override" ->
-                "Area supplied · delivery unverified"
+                Map.get(profile, :confirmation) == "user_override" ->
+                  "Area supplied · delivery unverified"
 
-              true ->
-                "Location confirmed"
-            end}
-          </p>
-          <p role="status" aria-live="polite" class="mt-1 text-xs text-gray-600">
-            {profile.message}
-          </p>
-          <p :if={profile.label} class="mt-1 text-xs text-gray-500">
-            Store location: {profile.label}
-          </p>
-          <p :if={Map.get(profile, :branch)} class="mt-1 text-xs text-gray-500">
-            Branch: {profile.branch}
-          </p>
-          <button
-            :if={profile.status in ["awaiting_input", "confirming"]}
-            phx-click="delivery-window"
-            phx-value-action="confirm"
-            phx-value-store={store.id}
-            disabled={profile.status == "confirming"}
-            phx-disable-with="Checking location…"
-            class="mt-2 rounded bg-blue-600 px-3 py-2 text-sm text-white"
-          >
-            {cond do
-              profile.status == "confirming" -> "Checking location…"
-              store.id == "naivas" -> "Use this area for Naivas"
-              true -> "I confirmed delivery in the store"
-            end}
-          </button>
-          <button
-            phx-click="delivery-window"
-            phx-value-action="open"
-            phx-value-store={store.id}
-            class="mt-2 text-sm text-blue-700 underline"
-          >
-            Show store window
-          </button>
-          <button
-            phx-click="delivery-window"
-            phx-value-action="close"
-            phx-value-store={store.id}
-            class="ml-2 mt-2 text-sm text-gray-600 underline"
-          >
-            Close / change location
-          </button>
-        <% else %>
-          <p class="mt-1 text-sm text-gray-500">Delivery not confirmed</p>
-          <form id={"#{store.id}-delivery-form"} phx-submit="setup-delivery" class="mt-2">
-            <input type="hidden" name="store" value={store.id} />
-            <label for={"#{store.id}-delivery-area"} class="sr-only">
-              Delivery area for {store.label}
-            </label>
-            <input
-              id={"#{store.id}-delivery-area"}
-              name="area"
-              type="text"
-              placeholder="Area, e.g. Syokimau"
-              maxlength="200"
-              required
-              class="w-full rounded border-gray-300 text-sm"
-            />
+                true ->
+                  "Location confirmed"
+              end}
+            </p>
+            <p role="status" aria-live="polite" class="mt-1 text-xs text-gray-600">
+              {profile.message}
+            </p>
+            <p :if={profile.label} class="mt-1 text-xs text-gray-500">
+              Store location: {profile.label}
+            </p>
+            <p :if={Map.get(profile, :branch)} class="mt-1 text-xs text-gray-500">
+              Branch: {profile.branch}
+            </p>
             <button
-              type="submit"
-              phx-disable-with="Opening…"
-              class="mt-2 rounded border border-blue-200 px-3 py-2 text-sm text-blue-700"
+              :if={
+                Map.get(profile, :source) != :browser_location and
+                  profile.status in ["awaiting_input", "confirming"]
+              }
+              phx-click="delivery-window"
+              phx-value-action="confirm"
+              phx-value-store={store.id}
+              disabled={profile.status == "confirming"}
+              phx-disable-with="Checking location…"
+              class="mt-2 rounded bg-blue-600 px-3 py-2 text-sm text-white"
             >
-              Set delivery location
+              {cond do
+                profile.status == "confirming" -> "Checking location…"
+                store.id == "naivas" -> "Use this area for Naivas"
+                true -> "I confirmed delivery in the store"
+              end}
             </button>
-          </form>
-        <% end %>
+            <button
+              :if={
+                Map.get(profile, :source) == :browser_location and profile.status == "unavailable"
+              }
+              phx-click="delivery-window"
+              phx-value-action="locate"
+              phx-value-store={store.id}
+              class="mt-2 rounded bg-blue-600 px-3 py-2 text-sm text-white"
+            >
+              Retry automatically
+            </button>
+            <button
+              phx-click="delivery-window"
+              phx-value-action="open"
+              phx-value-store={store.id}
+              class="mt-2 text-sm text-blue-700 underline"
+            >
+              Show store window
+            </button>
+            <button
+              phx-click="delivery-window"
+              phx-value-action="close"
+              phx-value-store={store.id}
+              class="ml-2 mt-2 text-sm text-gray-600 underline"
+            >
+              Close / change location
+            </button>
+          <% else %>
+            <p class="mt-1 text-sm text-gray-500">Delivery not confirmed</p>
+            <form id={"#{store.id}-delivery-form"} phx-submit="setup-delivery" class="mt-2">
+              <input type="hidden" name="store" value={store.id} />
+              <label for={"#{store.id}-delivery-area"} class="sr-only">
+                Delivery area for {store.label}
+              </label>
+              <input
+                id={"#{store.id}-delivery-area"}
+                name="area"
+                type="text"
+                placeholder="Area, e.g. Syokimau"
+                maxlength="200"
+                required
+                class="w-full rounded border-gray-300 text-sm"
+              />
+              <button
+                type="submit"
+                phx-disable-with="Opening…"
+                class="mt-2 rounded border border-blue-200 px-3 py-2 text-sm text-blue-700"
+              >
+                Set delivery location
+              </button>
+            </form>
+          <% end %>
+        </div>
       </div>
-    </div>
+    </details>
   </section>
   <div class="shopping-workbench">
     <section class="assistant-panel" aria-labelledby="assistant-heading">
@@ -575,7 +597,7 @@
                     >
                       {cond do
                         Map.get(cart_job, :window_status) == "opening" -> "Opening cart…"
-                        cart_job.status in ["ready", "needs_attention"] -> "Open filled cart"
+                        cart_job.status in ["ready", "needs_attention"] -> "Continue to checkout"
                         true -> "Review #{store.label} window"
                       end}
                     </button>

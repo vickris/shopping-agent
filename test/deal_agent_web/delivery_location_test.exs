@@ -13,7 +13,7 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     {:ok, view, _} = live(conn, "/")
     view |> form("#chat-form", chat: %{message: "2 litres of milk"}) |> render_submit()
     render_async(view, 1000)
-    assert has_element?(view, ".carrefour-error", "Confirm this store’s delivery location")
+    assert has_element?(view, ".carrefour-error", "automatic location setup")
     refute has_element?(view, ".carrefour-product")
     view |> form("#carrefour-delivery-form", %{area: "Syokimau"}) |> render_submit()
 
@@ -41,10 +41,10 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     )
 
     open = "button[phx-click='cart-window'][phx-value-action='open'][phx-value-store='carrefour']"
-    assert has_element?(view, open, "Open filled cart")
+    assert has_element?(view, open, "Continue to checkout")
     view |> element(open) |> render_click()
     wait_until(fn -> has_element?(view, open <> "[disabled]", "Opening cart") end)
-    wait_until(fn -> has_element?(view, open <> ":not([disabled])", "Open filled cart") end)
+    wait_until(fn -> has_element?(view, open <> ":not([disabled])", "Continue to checkout") end)
     assert has_element?(view, "#carrefour-delivery", "Location confirmed")
     assert has_element?(view, "#carrefour-cart-status", "Cart filled")
 
@@ -89,7 +89,7 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     wait_until(fn -> has_element?(view, "#carrefour-delivery-form") end)
     refute has_element?(view, ".carrefour-product")
     view |> element("[phx-click='retry-search'][phx-value-store='carrefour']") |> render_click()
-    assert has_element?(view, ".carrefour-error", "Confirm this store’s delivery location")
+    assert has_element?(view, ".carrefour-error", "automatic location setup")
   end
 
   for store <- ~w(quickmart naivas) do
@@ -134,14 +134,52 @@ defmodule DealAgentWeb.DeliveryLocationTest do
       "accuracy" => 100
     })
 
-    for store <- ~w(carrefour quickmart) do
+    for store <- ~w(carrefour quickmart naivas) do
       wait_until(fn -> has_element?(view, "##{store}-delivery", "Location confirmed") end)
     end
 
-    wait_until(fn -> has_element?(view, "#naivas-delivery", "delivery unverified") end)
+    for store <- ~w(carrefour quickmart naivas) do
+      refute has_element?(view, "##{store}-delivery button[phx-value-action='confirm']")
+    end
+
+    assert has_element?(view, "#location-message", "Select your products, then Shop now")
     assert has_element?(view, "#quickmart-delivery", "Nearby Quickmart")
     refute render(view) =~ "36.936"
     refute render(view) =~ "-1.367"
+  end
+
+  test "an automatic store failure can retry without asking for store confirmation", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+
+    render_hook(view, "location-detected", %{
+      "latitude" => -1.367,
+      "longitude" => 36.936,
+      "accuracy" => 100
+    })
+
+    wait_until(fn -> has_element?(view, "#naivas-delivery", "Location confirmed") end)
+
+    {id, session} =
+      Enum.find(:sys.get_state(DealAgent.Delivery.Sessions), fn {_, s} ->
+        s.owner == view.pid and s.store == "naivas"
+      end)
+
+    event = %{
+      "type" => "setup",
+      "status" => "unavailable",
+      "message" => "The store could not confirm automatically."
+    }
+
+    send(DealAgent.Delivery.Sessions, {session.port, {:data, {:eol, Jason.encode!(event)}}})
+    retry = "#naivas-delivery button[phx-value-action='locate']"
+    wait_until(fn -> has_element?(view, retry, "Retry automatically") end)
+    refute has_element?(view, "#naivas-delivery button[phx-value-action='confirm']")
+    assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed == false
+    view |> element(retry) |> render_click()
+    wait_until(fn -> has_element?(view, "#naivas-delivery", "Location confirmed") end)
+    assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed
+    refute has_element?(view, retry)
+    assert has_element?(view, "#carrefour-delivery", "Location confirmed")
   end
 
   test "denied or invalid geolocation leaves manual area entry available", %{conn: conn} do

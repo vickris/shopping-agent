@@ -121,7 +121,7 @@ defmodule DealAgentWeb.ShopperLive do
          :location_message,
          if(map_size(profiles) == length(@stores),
            do: "Location received. Finding nearby service areas for each supermarket…",
-           else: "Some store browsers could not start. Retry or set those stores manually below."
+           else: "Some store browsers could not start. Refresh your location to retry."
          )
        )}
     else
@@ -176,25 +176,45 @@ defmodule DealAgentWeb.ShopperLive do
   end
 
   def handle_event("delivery-window", %{"store" => store_id, "action" => action}, socket)
-      when action in ["open", "close", "confirm"] do
+      when action in ["open", "close", "confirm", "locate"] do
     case socket.assigns.delivery_sessions[store_id] do
       %{id: id} ->
         case DeliverySessions.command(self(), id, action) do
-          :ok when action == "confirm" ->
+          :ok when action in ["confirm", "locate"] ->
             profile = socket.assigns.delivery_sessions[store_id]
 
             updated = %{
               profile
-              | status: "confirming",
-                message: "Checking the store’s saved delivery location…"
+              | status: if(action == "locate", do: "opening", else: "confirming"),
+                message:
+                  if(action == "locate",
+                    do: "Selecting the nearby store automatically…",
+                    else: "Checking the store’s saved delivery location…"
+                  )
             }
 
-            {:noreply,
-             assign(
-               socket,
-               :delivery_sessions,
-               Map.put(socket.assigns.delivery_sessions, store_id, updated)
-             )}
+            socket =
+              assign(
+                socket,
+                :delivery_sessions,
+                Map.put(socket.assigns.delivery_sessions, store_id, updated)
+              )
+
+            socket =
+              if action == "locate" do
+                store = store_for(%{"store" => store_id})
+
+                socket
+                |> assign(
+                  store.results_key,
+                  Map.new(socket.assigns.shopping_list.items, &{&1.id, :loading})
+                )
+                |> location_progress()
+              else
+                socket
+              end
+
+            {:noreply, socket}
 
           :ok ->
             {:noreply, socket}
@@ -766,6 +786,25 @@ defmodule DealAgentWeb.ShopperLive do
 
             {:noreply, assign(socket, :delivery_sessions, profiles)}
 
+          %{"type" => "setup", "status" => "unavailable", "message" => message} ->
+            socket = invalidate_store(socket, store)
+            updated = %{profile | status: "unavailable", message: message}
+
+            {:noreply,
+             socket
+             |> assign(
+               :delivery_sessions,
+               Map.put(socket.assigns.delivery_sessions, store_id, updated)
+             )
+             |> assign(
+               store.results_key,
+               Map.new(
+                 socket.assigns.shopping_list.items,
+                 &{&1.id, {:error, :location_unconfirmed}}
+               )
+             )
+             |> location_progress()}
+
           %{"type" => "setup_error", "message" => message} ->
             {:noreply, put_flash(socket, :error, message)}
 
@@ -855,10 +894,10 @@ defmodule DealAgentWeb.ShopperLive do
             "Finding nearby service areas for each supermarket…"
 
           length(profiles) == length(@stores) and Enum.all?(profiles, &(&1.status == "confirmed")) ->
-            "Store locations are ready. Naivas delivery coverage remains unverified."
+            "Nearby stores are ready. Select your products, then Shop now."
 
           true ->
-            "Some stores need manual location setup. Confirmed stores are ready to search."
+            "Some stores could not confirm your location automatically. Available stores are ready; failed stores can retry in location settings."
         end
 
       assign(socket, :location_message, message)
@@ -872,7 +911,8 @@ defmodule DealAgentWeb.ShopperLive do
       "Wait for this store’s searches to finish, or close its existing cart before preparing another."
 
   defp cart_error_message(:location_unconfirmed),
-    do: "Confirm this store’s delivery location and search again before shopping."
+    do:
+      "This store has not resolved your location yet. Retry automatic location setup and search again."
 
   defp cart_error_message(:incomplete_basket),
     do: "Select a product for every Carrefour row before shopping."
@@ -931,10 +971,15 @@ defmodule DealAgentWeb.ShopperLive do
 
     if (is_nil(profile) or profile.status != "confirmed") and
          Application.get_env(:deal_agent, :require_delivery_location, true) do
+      result =
+        if profile && profile.status == "opening",
+          do: :loading,
+          else: {:error, :location_unconfirmed}
+
       assign(
         socket,
         store.results_key,
-        Map.put(socket.assigns[store.results_key], item.id, {:error, :location_unconfirmed})
+        Map.put(socket.assigns[store.results_key], item.id, result)
       )
     else
       options =
@@ -1088,7 +1133,7 @@ defmodule DealAgentWeb.ShopperLive do
 
   defp search_error_message(reason, _) when reason in [:location_unconfirmed, :location_changed],
     do:
-      "Confirm this store’s delivery location above before searching. Default-area results are not used."
+      "Waiting for this store’s automatic location setup. Allow browser location access or retry in location settings."
 
   defp search_error_message(:session_busy, _),
     do: "This store window is busy with another search or cart. Try again after it finishes."

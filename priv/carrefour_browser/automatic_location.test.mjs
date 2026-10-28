@@ -54,9 +54,79 @@ test('Quickmart uses native GPS and the resolver-selected branch', () => fixture
     assert.equal(location.confirmation, 'geolocation');
 }));
 
-test('Naivas remains explicitly unverified when using browser location', () => fixture('https://www.naivas.online/', '<span class="geoLocation">Nairobi, Kenya</span>', async page => {
-  assert.equal((await selectAutomaticLocation(page, 'naivas', point)).confirmation, 'user_override');
+function naivasFixture(save=true) {
+  return `
+  <span class="geoLocation">Nairobi, Kenya</span>
+  <button data-drawer-show="address_drawer" onclick="document.querySelector('#address_drawer').hidden=false">Change</button>
+  <div id="address_drawer" hidden>
+    <button onclick="document.querySelector('#form').hidden=false;document.querySelector('#address_drawer').setAttribute('role','dialog')">Add New Address</button>
+    <div id="form" hidden><input id="address-input_map_drawer" class="pac-target-input">
+    <div class="pac-item" onclick="window.selected=true">Nearby Road, Kenya</div>
+    <button onclick="if(window.selected && ${save}){localStorage.setItem('address','Nearby Road, Kenya');document.querySelector('.geoLocation').textContent='Nearby Road, Kenya';}document.querySelector('#address_drawer').hidden=true;document.querySelector('#address_drawer').removeAttribute('role')">Save Address</button></div>
+  </div>
+  <script>
+    window.Livewire={find:()=>({get:key=>window.selected?(key==='latitude'?-1.367:36.936):null})};window.Alpine={};
+    document.querySelector('.geoLocation').textContent=localStorage.getItem('address')||'Nairobi, Kenya';
+    window.google={maps:{Geocoder:class {async geocode(request){const far=request.address==='Nairobi, Kenya';return {results:[{formatted_address:'Nearby Road, Kenya',types:['route'],geometry:{location:{lat:()=>far?-1.28:-1.367,lng:()=>far?36.8:36.936}}}]}}}}};
+  </script>`;
+}
+
+test('Naivas selects a nearby address, saves it and verifies persistence without an override',()=>fixture('https://www.naivas.online/',naivasFixture(),async page=>{
+  const result=await selectAutomaticLocation(page,'naivas',point,async url=>{assert.equal(new URL(url).pathname,'/search');await page.reload();});
+  assert.equal(result.label,'Nearby Road, Kenya');
+  assert.equal(result.confirmation,'geolocation');
 }));
+
+test('Naivas ignores suggestions covered by a duplicate autocomplete overlay',()=>fixture('https://www.naivas.online/',naivasFixture(),async page=>{
+  await page.evaluate(()=>{
+    const item=document.querySelector('.pac-item');
+    item.style.cssText='position:absolute;left:200px;top:200px;width:300px;height:40px;z-index:2;background:white';
+    const covered=item.cloneNode(true);covered.style.zIndex='1';
+    covered.setAttribute('onclick','window.wrongLocation=true');
+    item.before(covered);
+  });
+  assert.equal((await selectAutomaticLocation(page,'naivas',point)).confirmation,'geolocation');
+  assert.equal(await page.evaluate(()=>Boolean(window.wrongLocation)),false);
+}));
+
+test('Naivas waits for asynchronous map coordinates before saving',()=>fixture('https://www.naivas.online/',naivasFixture(),async page=>{
+  await page.evaluate(()=>{
+    document.querySelector('.pac-item').setAttribute('onclick','window.selected=true;setTimeout(()=>window.nativeReady=true,300)');
+    window.Livewire.find=()=>({get:key=>window.nativeReady?(key==='latitude'?-1.367:36.936):null});
+    const save=Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Save Address');
+    save.setAttribute('onclick','if(!window.nativeReady)window.savedTooEarly=true;'+save.getAttribute('onclick'));
+  });
+  assert.equal((await selectAutomaticLocation(page,'naivas',point)).confirmation,'geolocation');
+  assert.equal(await page.evaluate(()=>Boolean(window.savedTooEarly)),false);
+}));
+
+test('Naivas can report the abbreviated street of a geocoded premise',()=>fixture('https://www.naivas.online/',naivasFixture(),async page=>{
+  await page.evaluate(()=>{
+    const Original=google.maps.Geocoder;
+    google.maps.Geocoder=class extends Original {async geocode(request){const result=await super.geocode(request);if(request.location)result.results[0].formatted_address='Health Centre, Nearby Road, Kenya';return result;}};
+    const save=Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Save Address');
+    save.setAttribute('onclick',save.getAttribute('onclick').replace("textContent='Nearby Road, Kenya'","textContent='Nearby Road'"));
+  });
+  assert.equal((await selectAutomaticLocation(page,'naivas',point)).label,'Nearby Road');
+}));
+
+test('Naivas never marks its unchanged default location as automatically confirmed',()=>fixture('https://www.naivas.online/',naivasFixture(false),async page=>{
+  await assert.rejects(selectAutomaticLocation(page,'naivas',point),/location_not_saved/);
+}));
+
+test('homepage resolves location on entry without waiting for a button click',async()=>{
+  const source=await readFile(new URL('../../assets/js/location.js',import.meta.url),'utf8');
+  await fixture('https://shop.test/','<div id="location" data-auto-location><button data-use-location>Refresh my location</button><p data-location-progress></p></div>',async page=>{
+    await page.evaluate(async source=>{
+      const {BrowserLocation}=await import('data:text/javascript,'+encodeURIComponent(source));
+      window.events=[];
+      BrowserLocation.mounted.call({el:document.querySelector('#location'),pushEvent:(name,data,done)=>{window.events.push({name,data});done?.();}});
+    },source);
+    await page.waitForFunction(()=>window.events.length===1);
+    assert.deepEqual(await page.evaluate(()=>window.events),[{name:'location-detected',data:point}]);
+    assert.equal(await page.evaluate(()=>localStorage.length),0);
+  });
+});
 
 test('homepage permission denial sends no coordinates and keeps the button usable', async () => {
   const source = await readFile(new URL('../../assets/js/location.js', import.meta.url), 'utf8');
