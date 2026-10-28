@@ -1,13 +1,59 @@
 # DealAgent
 
-To start your Phoenix server:
+An Elixir/Phoenix shopping workspace for comparing Kenyan supermarket products.
+Write a shopping list in prose, choose the supermarkets to compare, select a
+product for each item and review each store's selected subtotal in KES.
+
+Supported stores: **Carrefour, Quickmart, Naivas and Foodplus (Chandarana)**.
+Results depend on the store's availability and delivery-location confirmation.
+
+## See the app
+
+![Chat input and intent capture in the running app](docs/images/prose-shopping-flow.gif)
+
+This GIF shows a real local UI session: entering two items and selecting Naivas
+and Carrefour through prose. Location permission was denied in the capture, so
+searches wait for location setup. It does **not** demonstrate retrieved prices,
+checkout, or independently verified live OpenAI execution. Pauses are shortened.
+No sample product prices are injected into these images.
+
+![The shopping workspace before adding items](docs/images/shopping-workspace.jpg)
+
+[Full comparison screenshot](docs/images/prose-intent-comparison.jpg) ·
+[Agent flow, tool calling and guardrails](docs/agent-flow.md) ·
+[Render deployment guide](docs/deploy-render.md) ·
+[Online checkout design](docs/online-shopping-flow.md)
+
+## How the agent is used
+
+`ShoppingAgent` calls `BeamAgent.API.run/2` to turn a message into a structured
+shopping intent. Its only registered tool is **`capture_intent`**. BeamAgent
+limits each run to three iterations, one tool call and a 100-second execution
+budget, and requires the intent tool to have been called before accepting a run.
+The application then validates item quantities, units and supermarket names.
+
+Supermarket searches are **ordinary Elixir calls through per-store browser
+queues**, not model tool calls. Headless Firefox or Chromium fetches the store's
+pages; adapters parse and normalize products. The shopper chooses the equivalent
+product. Decimal arithmetic determines whole-pack costs and selected subtotals;
+the language model does not invent prices or calculate the basket.
+
+## Run locally
+
+Install Elixir/Erlang, PostgreSQL and Node.js, then:
 
   * Run `mix setup` to install and setup dependencies
+  * Run `npm ci --prefix priv/carrefour_browser`
+  * Install browsers with `cd priv/carrefour_browser && npx playwright install --with-deps chromium firefox`
+  * Set `OPENAI_API_KEY` in the server's environment before starting it. Do not commit the key.
   * Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
+For the friends beta, use the [Render Docker deployment guide](docs/deploy-render.md).
+The online preview supports comparison and selection; desktop-only checkout
+controls are disabled until a remote-browser handoff is implemented. Foodplus
+currently supports comparison only, including in local mode.
 
 ## Learn more
 
