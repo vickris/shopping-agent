@@ -74,7 +74,18 @@ defmodule DealAgent.Delivery.Sessions do
         {:reply, {:error, :already_confirmed}, sessions}
 
       %{owner: ^owner} = session
-      when action in ["close", "open", "resume"] or is_nil(session.busy) ->
+      when action == "open" and
+             (is_nil(session.busy) or session.busy == :handoff or session.busy == {:cart, nil}) ->
+        Port.command(session.port, Jason.encode!(%{action: action}) <> "\n")
+        token = make_ref()
+        timer = Process.send_after(self(), {:window_timeout, id, token}, 120_000)
+
+        {:reply, :ok,
+         Map.put(sessions, id, %{session | busy: {:window, session.busy, timer, token}})}
+
+      %{owner: ^owner} = session
+      when (action == "resume" and session.busy == {:cart, nil}) or
+             (action == "confirm" and is_nil(session.busy)) ->
         Port.command(session.port, Jason.encode!(%{action: action}) <> "\n")
 
         sessions =
@@ -160,6 +171,18 @@ defmodule DealAgent.Delivery.Sessions do
               {:noreply, sessions}
           end
 
+        %{"type" => "window", "status" => status} ->
+          send(session.owner, {:delivery_event, id, event})
+
+          case session.busy do
+            {:window, previous, timer, _} when status in ["opened", "failed"] ->
+              Process.cancel_timer(timer)
+              {:noreply, Map.put(sessions, id, %{session | busy: previous})}
+
+            _ ->
+              {:noreply, sessions}
+          end
+
         %{"type" => "confirmed", "location" => location} ->
           send(session.owner, {:delivery_event, id, event})
           {:noreply, Map.put(sessions, id, %{session | confirmed: is_map(location)})}
@@ -207,6 +230,13 @@ defmodule DealAgent.Delivery.Sessions do
     end
   end
 
+  def handle_info({:window_timeout, id, token}, sessions) do
+    case sessions[id] do
+      %{busy: {:window, _, _, ^token}} -> {:noreply, close_session(sessions, id)}
+      _ -> {:noreply, sessions}
+    end
+  end
+
   def handle_info({:cart_timeout, id}, sessions) do
     case sessions[id] do
       %{busy: {:cart, timer}} when not is_nil(timer) -> {:noreply, close_session(sessions, id)}
@@ -249,6 +279,9 @@ defmodule DealAgent.Delivery.Sessions do
             Process.cancel_timer(timer)
             Process.demonitor(monitor, [:flush])
             GenServer.reply(from, {:error, :location_unconfirmed})
+
+          {:window, _, timer, _} ->
+            Process.cancel_timer(timer)
 
           {:cart, timer} ->
             if timer, do: Process.cancel_timer(timer)

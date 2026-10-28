@@ -533,7 +533,7 @@
                     Shop now
                   </button>
                   <p class="mt-2 text-xs text-gray-500">
-                    Opens a {store.label} cart window. You review and pay there.
+                    Prepares your basket in the background. Open it on this computer to review and pay.
                   </p>
                   <div
                     :if={cart_job}
@@ -568,8 +568,16 @@
                       phx-click="cart-window"
                       phx-value-action="open"
                       phx-value-store={store.id}
+                      disabled={
+                        cart_job.status == "preparing" or
+                          Map.get(cart_job, :window_status) == "opening"
+                      }
                     >
-                      Show {store.label} window
+                      {cond do
+                        Map.get(cart_job, :window_status) == "opening" -> "Opening cart…"
+                        cart_job.status in ["ready", "needs_attention"] -> "Open filled cart"
+                        true -> "Review #{store.label} window"
+                      end}
                     </button>
                     <button
                       :if={cart_job.status != "closed"}

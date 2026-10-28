@@ -23,11 +23,33 @@ defmodule DealAgent.Delivery.SessionsTest do
       assert_receive {:cart_event, ^id, %{"status" => "needs_attention", "verified" => true}},
                      3000
 
+      assert :ok = Sessions.command(owner, id, "open")
+      assert {:error, :session_unavailable} = Sessions.command(owner, id, "open")
+      assert {:error, :session_busy} = Sessions.search(owner, id, store, "milk")
+      assert_receive {:delivery_event, ^id, %{"type" => "window", "status" => "opened"}}, 3000
       assert {:error, :session_busy} = Sessions.search(owner, id, store, "milk")
       assert :ok = Sessions.command(owner, id, "close")
       assert_receive {:delivery_event, ^id, %{"type" => "closed"}}, 3000
       assert {:error, :location_unconfirmed} = Sessions.search(owner, id, store, "milk")
     end
+  end
+
+  test "failed window handoff preserves the cart reservation and permits another open" do
+    assert {:ok, id} = Sessions.start(self(), "carrefour", "Window failure")
+    assert :ok = Sessions.command(self(), id, "confirm")
+    assert_receive {:delivery_event, ^id, %{"type" => "confirmed"}}, 3000
+    assert :ok = Sessions.cart(self(), id, "carrefour", %{delivery_session_id: id, products: []})
+    assert_receive {:cart_event, ^id, %{"verified" => true}}, 3000
+
+    for _ <- 1..2 do
+      assert :ok = Sessions.command(self(), id, "open")
+      assert_receive {:delivery_event, ^id, %{"type" => "window", "status" => "failed"}}, 3000
+      assert :sys.get_state(Sessions)[id].busy == :handoff
+      assert :sys.get_state(Sessions)[id].confirmed
+      assert {:error, :session_busy} = Sessions.search(self(), id, "carrefour", "milk")
+    end
+
+    assert :ok = Sessions.command(self(), id, "close")
   end
 
   test "location changes invalidate confirmation without default-area fallback" do

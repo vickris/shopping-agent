@@ -146,9 +146,23 @@ Existing searches and selections are cleared when the location changes. A live
 cart must be closed first so changing location cannot interrupt checkout. If
 permission is denied or a store cannot resolve the location, manual area entry
 remains available; a default branch is never silently marked GPS-confirmed.
-Search and cart preparation retain the same store browser context. A generic
+Search and cart preparation start headlessly. After a verified basket is ready,
+**Open filled cart** below that supermarket's total opens its guest session in a
+visible browser on the computer running this app. The handoff copies cookies,
+local storage, IndexedDB and session storage only in Node process memory; it
+checks the delivery location, product IDs, quantities and prices before replacing
+the background browser. A failed handoff retains the original basket for another
+attempt without adding products again. Manual location setup and store prompts
+can still open a window earlier. Close the session when finished; session expiry
+also closes it. Review delivery, minimum-order rules and payment in the store;
+the assistant never submits checkout or payment.
+
+This is a local desktop flow, not a shareable cart link. A generic
 guest-cart URL does not transfer that browser's cart to another device; phone
 handoff requires a supermarket-supported shared cart or verified account sync.
 
 Additional browser checks:
 `node --test priv/carrefour_browser/automatic_location.test.mjs`.
+
+Cart handoff browser checks:
+`node --test priv/carrefour_browser/browser_handoff.test.mjs`.

@@ -40,6 +40,14 @@ defmodule DealAgentWeb.DeliveryLocationTest do
       3000
     )
 
+    open = "button[phx-click='cart-window'][phx-value-action='open'][phx-value-store='carrefour']"
+    assert has_element?(view, open, "Open filled cart")
+    view |> element(open) |> render_click()
+    wait_until(fn -> has_element?(view, open <> "[disabled]", "Opening cart") end)
+    wait_until(fn -> has_element?(view, open <> ":not([disabled])", "Open filled cart") end)
+    assert has_element?(view, "#carrefour-delivery", "Location confirmed")
+    assert has_element?(view, "#carrefour-cart-status", "Cart filled")
+
     render_hook(view, "location-detected", %{
       "latitude" => -1.367,
       "longitude" => 36.936,

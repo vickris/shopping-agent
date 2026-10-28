@@ -1,7 +1,10 @@
-// One temporary, in-memory browser context per shopper/store. No cookie export.
+// One temporary guest session per shopper/store. State never leaves this process.
 import readline from 'node:readline';
 import {fileURLToPath} from 'node:url';
 import {realpathSync} from 'node:fs';
+import {openBrowserSession} from './browser_handoff.mjs';
+import {verifyCarrefourCart} from './carrefour_cart.mjs';
+import {verifyStoreCart} from './store_carts.mjs';
 import {fillCart} from './cart_flow.mjs';
 import {cartFailure} from './cart_errors.mjs';
 import {selectAutomaticLocation} from './automatic_location.mjs';
@@ -9,10 +12,33 @@ import {readLocation, confirmLocation, confirmationError} from './delivery_locat
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 delete process.env.OPENAI_API_KEY;
 delete process.env.ANTHROPIC_API_KEY;
-export async function runSession({input,emit,onSetup,onError,headless=false}) {
+export async function runSession({input,emit,onSetup,onError,headless=true}) {
 const setup = await new Promise(resolve=>input.once('line',line=>resolve(JSON.parse(line))));
 const roots={carrefour:'https://www.carrefour.ke/mafken/en',quickmart:'https://www.quickmart.co.ke/',naivas:'https://www.naivas.online/'};
-let browser,page,confirmed,initialIdentity,busy=false,resume;
+let browser,page,confirmed,initialIdentity,busy=false,resume,starting=true,cartPlan;
+let engine,contextOptions;
+const disconnected=()=>{emit({type:'closed'});process.exit(0);};
+async function showWindow() {
+  if(!headless){await page.bringToFront();return;}
+  const next=await openBrowserSession({browser,page,
+    launch:()=>engine.launch({headless:false,...(setup.store==='quickmart'?{channel:'chromium'}:{})}),
+    contextOptions,origin:new URL(roots[setup.store]).origin,
+    verify:async candidate=>{
+      if(confirmed) {
+        const current=await readLocation(candidate,setup.store);
+        if(JSON.stringify(current)!==JSON.stringify(confirmed))throw Error('location_changed');
+      }
+      if(cartPlan) {
+        if(setup.store==='carrefour')await verifyCarrefourCart(candidate,cartPlan.products,cents);
+        else await verifyStoreCart({page:candidate,plan:cartPlan,cents});
+      }
+    }});
+  const previous=browser;
+  previous.off('disconnected',disconnected);
+  browser=next.browser;page=next.page;headless=false;
+  browser.on('disconnected',disconnected);
+  await previous.close();
+}
 const cents = value => {
   const match=String(value).replaceAll(',','').match(/^(\d+)(?:\.(\d{1,2}))?$/);
   if(!match)throw Error('invalid_price');
@@ -36,16 +62,30 @@ async function assertLocation() {
 }
 
 async function pause(message) {
+  await showWindow();
+  const continued=new Promise(resolve=>{resume=resolve;});
   emit({type:'cart',status:'awaiting_input',message,verified:false});
-  await page.bringToFront();
-  await new Promise(resolve=>{resume=resolve;});
+  await continued;
   await assertLocation();
 }
 input.on('line',async line=>{
   let message;
   try {message=JSON.parse(line);}catch{return;}
   if(message.action==='close'){await browser?.close();process.exit(0);}
-  if(message.action==='open'){await page?.bringToFront();return;}
+  if(message.action==='open') {
+    if(starting || (busy && !resume)) {
+      emit({type:'window',status:'failed',message:'Wait for the current store operation to finish, then open its window.'});return;
+    }
+    busy=true;
+    emit({type:'window',status:'opening'});
+    try {
+      await showWindow();
+      emit({type:'window',status:'opened'});
+    } catch {
+      emit({type:'window',status:'failed',message:'The store window could not restore and verify this session. The original basket is retained; try opening it again.'});
+    } finally {busy=false;}
+    return;
+  }
   if(message.action==='resume' && resume){const next=resume;resume=null;next();return;}
   if(busy){emit({type:'reply',id:message.id,error:'session_busy'});return;}
   busy=true;
@@ -80,11 +120,13 @@ input.on('line',async line=>{
       await assertLocation();
       const checkedNavigate=async url=>{await navigate(url);await assertLocation();};
       emit({type:'cart',status:'preparing',message:setup.store==='naivas'?'Preparing your Naivas basket. Delivery to your supplied area must be checked in Naivas checkout.':'Preparing your basket at the confirmed delivery location.'});
-      const result=await fillCart({page,plan:{...message.plan,delivery:confirmed},navigate:checkedNavigate,cents,pause,
+      // Adapters must follow the current page after a paused browser handoff.
+      const livePage=new Proxy({}, {get:(_,key)=>typeof page[key]==='function'?page[key].bind(page):page[key]});
+      const result=await fillCart({page:livePage,plan:{...message.plan,delivery:confirmed},navigate:checkedNavigate,cents,pause,
         emit:event=>emit({type:'cart',...event})});
       await assertLocation();
+      if(result.verified)cartPlan=message.plan;
       emit({type:'cart',...result});
-      await page.bringToFront();
     }
   } catch(error) {
     const kind=['location_changed','location_unconfirmed','session_busy','invalid_basket','price_changed','cart_mismatch'].includes(error.message)?error.message:'store_unavailable';
@@ -98,11 +140,13 @@ input.on('close',async()=>{await browser?.close();process.exit(0);});
 try {
   if(!roots[setup.store] || typeof setup.area!=='string' || setup.area.length>200)throw Error('invalid_setup');
   const {firefox,chromium}=await import('playwright');
-  browser=await (setup.store==='quickmart'?chromium:firefox).launch({headless,...(setup.store==='quickmart'?{channel:'chromium'}:{})});
-  browser.on('disconnected',()=>{emit({type:'closed'});process.exit(0);});
+  engine=setup.store==='quickmart'?chromium:firefox;
+  browser=await engine.launch({headless,...(setup.store==='quickmart'?{channel:'chromium'}:{})});
+  browser.on('disconnected',disconnected);
   const point=setup.coordinates;
   if(point && (![point.latitude,point.longitude,point.accuracy].every(Number.isFinite)||Math.abs(point.latitude)>90||Math.abs(point.longitude)>180||point.accuracy<0))throw Error('invalid_setup');
-  const context=await browser.newContext(point?{geolocation:point}:{});
+  contextOptions=point?{geolocation:point}:{};
+  const context=await browser.newContext(contextOptions);
   if(point)await context.grantPermissions(['geolocation'],{origin: new URL(roots[setup.store]).origin});
   page=await context.newPage();
   await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : roots.naivas+'search?term=milk');
@@ -119,13 +163,14 @@ try {
       emit({type:'setup',status:'awaiting_input',message:'The store could not select a nearby service area automatically. No default location was accepted. Set an address in its window or close this session and enter an area manually.'});
     }
   } else {
+  await showWindow();
   emit({type:'setup',status:'awaiting_input',message:setup.store==='naivas'?'You can try selecting the address in Naivas. If its map does not update, choose Use this area for Naivas in the app to proceed with delivery unverified.':'Select your delivery area in this store window. For Quickmart press Continue after choosing the address; the selected branch will open automatically when you confirm. Confirm here only when the store accepts delivery to your area.'});
-  await page.bringToFront();
   }
+  starting=false;
 } catch(error) {if(onError)await onError(error);emit({type:'setup_error',message:error.name==='TimeoutError'?'The store took too long to load. Retry delivery setup.':'The store browser could not open. Check the installed browser runtime and connection, then retry.'});emit({type:'closed'});await browser?.close();process.exit(1);}
 
 }
 if (process.argv[1] && realpathSync(process.argv[1])===fileURLToPath(import.meta.url)) {
   await runSession({input:readline.createInterface({input:process.stdin}),
-    emit:event=>process.stdout.write(JSON.stringify(event)+'\n'),headless:process.argv.includes('--test')});
+    emit:event=>process.stdout.write(JSON.stringify(event)+'\n'),headless:true});
 }

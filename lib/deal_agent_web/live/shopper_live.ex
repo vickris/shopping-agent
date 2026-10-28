@@ -236,7 +236,7 @@ defmodule DealAgentWeb.ShopperLive do
               id: id,
               status: "preparing",
               message:
-                "Opening #{store.label} for #{plan.selected_count} selected item(s); skipping #{plan.skipped_count} unselected item(s)…",
+                "Preparing #{store.label} for #{plan.selected_count} selected item(s); skipping #{plan.skipped_count} unselected item(s)…",
               estimated_total: plan.estimated_total
             }
 
@@ -691,6 +691,29 @@ defmodule DealAgentWeb.ShopperLive do
         store = store_for(%{"store" => store_id})
 
         case event do
+          %{"type" => "window", "status" => status} ->
+            jobs =
+              case socket.assigns.cart_jobs[store_id] do
+                %{id: ^id} = job ->
+                  Map.put(
+                    socket.assigns.cart_jobs,
+                    store_id,
+                    Map.put(job, :window_status, status)
+                  )
+
+                _ ->
+                  socket.assigns.cart_jobs
+              end
+
+            socket = assign(socket, :cart_jobs, jobs)
+            socket = if status == "opened", do: clear_flash(socket, :error), else: socket
+
+            {:noreply,
+             if(status == "failed",
+               do: put_flash(socket, :error, event["message"]),
+               else: socket
+             )}
+
           %{"type" => "confirmed", "location" => location} ->
             socket = invalidate_store(socket, store)
 

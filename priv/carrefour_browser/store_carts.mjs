@@ -37,14 +37,7 @@ export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
         await wait(async()=> Number(await qty.inputValue()) === n);
       }
     }
-    await page.locator('button.button-cart').click();
-    const rows = page.locator('#sideCartJs li.list-cart-item');
-    await wait(async()=> await rows.count() === plan.products.length);
-    for (const p of plan.products) {
-      const row = rows.filter({has:page.locator(`a.product-profile-title[href="${new URL(p.url).pathname}"]`)});
-      await wait(async()=> await row.count()===1 && (await row.locator('.selected-quantity').innerText()).trim() === `Quantity: ${p.packs}`);
-      if (price(await row.locator('.products-price-new').first().innerText()) !== cents(p.expected_price)) throw new Error('price_changed');
-    }
+    await verifyStoreCart({page,plan,cents});
   } else {
     for (const p of plan.products) {
       emit({status:'preparing',message:`Adding ${p.name} to Naivas.`});
@@ -76,6 +69,31 @@ export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
       }
     }
     await navigate('https://www.naivas.online/cart/index');
+    await verifyStoreCart({page,plan,cents});
+  }
+  return {status:'needs_attention',verified:true,message:`Your ${plan.store==='quickmart'?'Quickmart':'Naivas'} cart is filled and verified. Review delivery details, sign in if required, and pay in the store window.`,estimated_total:plan.estimated_total,product_count:plan.products.length};
+}
+
+// Read-only verification also used after opening a prepared guest session.
+export async function verifyStoreCart({page,plan,cents}) {
+  const price = text => cents(text.replace(/KES|KSh|\s|,/gi, ''));
+  const wait = async predicate => {
+    for(let i=0;i<80;i++) {
+      if(await predicate())return;
+      await page.waitForTimeout(250);
+    }
+    throw Error('cart_mismatch');
+  };
+  if(plan.store==='quickmart') {
+    await page.locator('button.button-cart').click();
+    const rows = page.locator('#sideCartJs li.list-cart-item');
+    await wait(async()=> await rows.count() === plan.products.length);
+    for (const p of plan.products) {
+      const row = rows.filter({has:page.locator(`a.product-profile-title[href="${new URL(p.url).pathname}"]`)});
+      await wait(async()=> await row.count()===1 && (await row.locator('.selected-quantity').innerText()).trim() === `Quantity: ${p.packs}`);
+      if (price(await row.locator('.products-price-new').first().innerText()) !== cents(p.expected_price)) throw new Error('price_changed');
+    }
+  } else {
     const rows=page.locator('div.rounded-xl.p-4.w-full').filter({has:page.locator('a[wire\\:click^="updateQuantity("]')});
     await wait(async()=>await rows.count()===plan.products.length);
     for(const p of plan.products) {
@@ -84,5 +102,4 @@ export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
       if(price(await row.locator('.font-extrabold').first().innerText())!==cents(p.expected_price)*BigInt(p.packs)) throw new Error('price_changed');
     }
   }
-  return {status:'needs_attention',verified:true,message:`Your ${plan.store==='quickmart'?'Quickmart':'Naivas'} cart is filled and verified. Review delivery details, sign in if required, and pay in the store window.`,estimated_total:plan.estimated_total,product_count:plan.products.length};
 }
