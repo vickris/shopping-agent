@@ -1,5 +1,5 @@
 // Only visible store UI is used; no account data or cookies leave the browser.
-const roots = {carrefour: 'www.carrefour.ke', quickmart: 'www.quickmart.co.ke', naivas: 'www.naivas.online'};
+const roots = {carrefour: 'www.carrefour.ke', quickmart: 'www.quickmart.co.ke', naivas: 'www.naivas.online', foodplus: 'foodplus.co.ke'};
 export async function readLocation(page, store, {ignoreDialog = false} = {}) {
   const host = new URL(page.url()).hostname.replace(/^www\./, '');
   if (host !== roots[store]?.replace(/^www\./, '')) throw Error('location_unconfirmed');
@@ -10,6 +10,9 @@ export async function readLocation(page, store, {ignoreDialog = false} = {}) {
     label = (await page.locator('header button').filter({has: page.locator('img[src*="Caret_Down_Arrow_for_address_location"]')}).innerText({timeout: 3000})).trim();
   } else if (store === 'naivas') {
     label = (await page.locator('.geoLocation:visible').first().innerText({timeout: 3000})).trim();
+  } else if (store === 'foodplus') {
+    label = (await page.locator('#switcher-store-trigger strong span').innerText({timeout:5000})).trim();
+    if (/Main Website Store|Select Store/i.test(label)) throw Error('location_unconfirmed');
   } else {
     label = (await page.locator('.js-location-address:visible').first().innerText({timeout: 3000})).trim();
     const report = page.locator('a[href*="/shops/report-spam/"]').first();
@@ -51,5 +54,5 @@ export function confirmationError(store, error) {
   if (error.message === 'branch_not_open') return 'Quickmart has not selected a branch yet. Choose a delivery address and press Continue in Quickmart, then try again.';
   if (error.message === 'location_not_saved') return 'The store still reports its original delivery location. Save or select your address in the store first, then try again.';
   if (error.message === 'location_dialog_open') return 'Finish and close the store’s delivery-location dialog, then try again.';
-  return (store === 'naivas' ? 'Naivas' : store === 'quickmart' ? 'Quickmart' : 'Carrefour') + ' has not exposed a selected delivery location yet. Finish saving the address in its window, then try again.';
+  return (store === 'naivas' ? 'Naivas' : store === 'quickmart' ? 'Quickmart' : store === 'foodplus' ? 'Foodplus' : 'Carrefour') + ' has not exposed a selected delivery location yet. Finish saving the address in its window, then try again.';
 }

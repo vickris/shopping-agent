@@ -1,3 +1,4 @@
+import {selectFoodplusLocation} from './foodplus_location.mjs';
 import {confirmLocation, readLocation} from './delivery_location.mjs';
 
 // Use the supermarket's own visible location workflow and map provider. Never
@@ -7,6 +8,7 @@ export async function selectAutomaticLocation(page, store, point, navigate, onPr
   const step=value=>{stage=value;onProgress(value);};
   try {
   step('opening_location');
+  if (store === 'foodplus') return await selectFoodplusLocation(page,point,navigate,step);
   if (store === 'naivas') {
     await page.getByRole('button', {name:'Close without accepting cookies',exact:true}).click({timeout:2500}).catch(()=>{});
     step('loading_map');

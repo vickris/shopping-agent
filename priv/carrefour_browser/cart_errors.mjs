@@ -1,6 +1,7 @@
 // Bounded diagnostics only: never expose browser output, URLs or exception text.
 export function cartFailure(error) {
   const messages = {
+    checkout_unavailable: 'Foodplus checkout is unavailable. Its website currently reports maintenance; prices and selections remain available for comparison.',
     cart_mismatch: 'The cart did not match the selected products, pack counts or prices. Review the partially filled cart before trying again.',
     price_changed: 'A product price changed. Review the partially filled cart before continuing.',
     product_redirected: 'The store opened a different product page. Review the store window before trying again.',

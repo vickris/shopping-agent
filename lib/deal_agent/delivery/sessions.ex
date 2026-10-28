@@ -2,7 +2,7 @@ defmodule DealAgent.Delivery.Sessions do
   @moduledoc "Owns temporary location-confirmed store browsers. Cookies stay in the browser process."
   use GenServer
   require Logger
-  @stores ~w(carrefour quickmart naivas)
+  @stores ~w(carrefour quickmart naivas foodplus)
   def start_link(_), do: GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
 
   def start(owner, store, area, coordinates \\ nil) when store in @stores and is_binary(area) do
@@ -33,7 +33,7 @@ defmodule DealAgent.Delivery.Sessions do
       Enum.any?(sessions, fn {_, s} -> s.owner == owner and s.store == store end) ->
         {:reply, {:error, :session_exists}, sessions}
 
-      map_size(sessions) >= 6 ->
+      map_size(sessions) >= 2 * length(@stores) ->
         {:reply, {:error, :session_capacity}, sessions}
 
       true ->

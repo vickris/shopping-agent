@@ -6,7 +6,8 @@ defmodule DealAgent.Supermarkets.SearchQueue do
   @names %{
     carrefour: DealAgent.CarrefourQueue,
     quickmart: DealAgent.QuickmartQueue,
-    naivas: DealAgent.NaivasQueue
+    naivas: DealAgent.NaivasQueue,
+    foodplus: DealAgent.FoodplusQueue
   }
 
   def child_spec(store),

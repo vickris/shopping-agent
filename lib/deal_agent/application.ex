@@ -11,6 +11,7 @@ defmodule DealAgent.Application do
       {DealAgent.Supermarkets.SearchQueue, :carrefour},
       {DealAgent.Supermarkets.SearchQueue, :quickmart},
       {DealAgent.Supermarkets.SearchQueue, :naivas},
+      {DealAgent.Supermarkets.SearchQueue, :foodplus},
       {DealAgent.Checkout.CartJobs, []},
       {DealAgent.Delivery.Sessions, []},
       DealAgentWeb.Telemetry,

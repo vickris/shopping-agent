@@ -28,6 +28,6 @@ export function locationFailure(store,error) {
     retaining_location:'did not retain the selected location after navigation'
   };
   const errorCode=/REQUEST_DENIED|OVER_QUERY_LIMIT|PERMISSION_DENIED/.test(error.message||'')?'map_service_rejected':error.name==='TimeoutError'?'location_timeout':['location_not_saved','address_not_found','location_unconfirmed','map_timeout'].includes(error.message)?error.message:'location_setup_failed';
-  const label={carrefour:'Carrefour',quickmart:'Quickmart',naivas:'Naivas'}[store]||'The store';
+  const label={carrefour:'Carrefour',quickmart:'Quickmart',naivas:'Naivas',foodplus:'Foodplus'}[store]||'The store';
   return {stage,error:errorCode,message:`${label} ${messages[stage]}. Retry location to try again automatically; other stores can continue.`};
 }

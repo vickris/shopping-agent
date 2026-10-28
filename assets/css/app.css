@@ -62,6 +62,7 @@ body { background:#f4f6f5; color:var(--ink); font-family:Inter,ui-sans-serif,sys
 .comparison-table thead { background:#fafcfb; }
 .comparison-table thead th { border-bottom:1px solid var(--line); font-size:13px; white-space:nowrap; }
 .store-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; background:#2171b1; }
+.store-foodplus .store-dot { background:#3a7928; }
 .store-quickmart .store-dot { background:#be3237; }.store-naivas .store-dot { background:#ee852d; }
 .comparison-table tbody > tr > th { min-width:120px; background:#fafcfb; }
 .comparison-table tbody > tr > th p:first-child { text-transform:capitalize; }

@@ -180,7 +180,7 @@ defmodule DealAgentWeb.ShopperLiveTest do
     assert has_element?(view, "#carrefour-total", "unselected item(s) will be skipped")
   end
 
-  test "three stores search through chat and selections and refreshes remain independent", %{
+  test "four stores search through chat and selections and refreshes remain independent", %{
     conn: conn
   } do
     {:ok, view, _} = live(conn, "/")
@@ -190,6 +190,19 @@ defmodule DealAgentWeb.ShopperLiveTest do
     assert has_element?(view, ".carrefour-product")
     assert has_element?(view, ".quickmart-product", "Quickmart Milk 500Ml")
     assert has_element?(view, ".naivas-product", "Naivas Milk 500Ml")
+    assert has_element?(view, ".foodplus-product", "Foodplus Milk 500Ml")
+    view |> element("[phx-value-product-id='701']") |> render_click()
+    assert has_element?(view, ".foodplus-selection", "Selected for milk")
+    assert has_element?(view, "#foodplus-total", "KES 280.00")
+    assert has_element?(view, "#foodplus-total button[phx-click='shop-now'][disabled]")
+    assert has_element?(view, "#foodplus-checkout-notice", "maintenance")
+
+    assert render_click(view, "shop-now", %{"store" => "foodplus"}) =~
+             "Foodplus checkout is unavailable"
+
+    refute has_element?(view, "#foodplus-cart-status")
+    view |> form(".foodplus-selection form", %{packs: "5"}) |> render_submit()
+    assert has_element?(view, "#foodplus-total", "KES 350.00")
     view |> element("[phx-value-product-id='naivas-milk']") |> render_click()
     assert has_element?(view, "#naivas-total", "KES 280.00")
     view |> element("[phx-value-product-id='milk-1']") |> render_click()
@@ -454,12 +467,12 @@ defmodule DealAgentWeb.ShopperLiveTest do
     assert render(view) =~ "Enter a supermarket search"
   end
 
-  test "Quickmart and Naivas can each search a different query in place", %{conn: conn} do
+  test "Quickmart, Naivas and Foodplus can each search a different query in place", %{conn: conn} do
     {:ok, view, _} = live(conn, "/")
     add_item(view, "bread")
     render_async(view, 1000)
 
-    for store <- ["quickmart", "naivas"] do
+    for store <- ["quickmart", "naivas", "foodplus"] do
       view |> form("form[id^='#{store}-filter-']", %{query: "milk"}) |> render_submit()
       render_async(view, 1000)
       assert has_element?(view, ".#{store}-product", "Milk")

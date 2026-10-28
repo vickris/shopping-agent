@@ -4,7 +4,10 @@ defmodule DealAgent.Supermarkets.Registry do
   """
 
   @supermarkets %{
-    carrefour: DealAgent.Supermarkets.Carrefour
+    carrefour: DealAgent.Supermarkets.Carrefour,
+    quickmart: DealAgent.Supermarkets.Quickmart,
+    naivas: DealAgent.Supermarkets.Naivas,
+    foodplus: DealAgent.Supermarkets.Foodplus
   }
 
   def fetch(name) do

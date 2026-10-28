@@ -66,6 +66,7 @@ defmodule DealAgent.Supermarkets.BrowserClient do
             :carrefour -> DealAgent.Supermarkets.Carrefour.ResponseParser
             :quickmart -> DealAgent.Supermarkets.Quickmart.ResponseParser
             :naivas -> DealAgent.Supermarkets.Naivas.ResponseParser
+            :foodplus -> DealAgent.Supermarkets.Foodplus.ResponseParser
           end
 
         parser.parse(html)

@@ -134,11 +134,11 @@ defmodule DealAgentWeb.DeliveryLocationTest do
       "accuracy" => 100
     })
 
-    for store <- ~w(carrefour quickmart naivas) do
+    for store <- ~w(carrefour quickmart naivas foodplus) do
       wait_until(fn -> has_element?(view, "##{store}-delivery", "Location confirmed") end)
     end
 
-    for store <- ~w(carrefour quickmart naivas) do
+    for store <- ~w(carrefour quickmart naivas foodplus) do
       refute has_element?(view, "##{store}-delivery button[phx-value-action='confirm']")
     end
 

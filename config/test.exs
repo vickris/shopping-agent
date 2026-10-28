@@ -49,3 +49,5 @@ config :deal_agent, :cart_runtime, DealAgent.Checkout.TestRuntime
 # Legacy offline fixtures do not open delivery browsers.
 config :deal_agent, :require_delivery_location, false
 config :deal_agent, :delivery_runtime, DealAgent.Delivery.TestRuntime
+
+config :deal_agent, :foodplus_search_options, client: DealAgent.Supermarkets.Foodplus.MockClient

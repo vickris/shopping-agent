@@ -3,7 +3,7 @@ defmodule DealAgent.Delivery.SessionsTest do
   alias DealAgent.Delivery.Sessions
 
   test "each store keeps its own confirmed session through search and cart handoff" do
-    for store <- ~w(carrefour quickmart naivas) do
+    for store <- ~w(carrefour quickmart naivas foodplus) do
       owner = self()
       assert {:ok, id} = Sessions.start(owner, store, "Syokimau")
       assert_receive {:delivery_event, ^id, %{"type" => "setup"}}, 3000

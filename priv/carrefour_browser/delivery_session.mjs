@@ -15,14 +15,14 @@ delete process.env.OPENAI_API_KEY;
 delete process.env.ANTHROPIC_API_KEY;
 export async function runSession({input,emit,onSetup,onError,headless=true}) {
 const setup = await new Promise(resolve=>input.once('line',line=>resolve(JSON.parse(line))));
-const roots={carrefour:'https://www.carrefour.ke/mafken/en',quickmart:'https://www.quickmart.co.ke/',naivas:'https://www.naivas.online/'};
+const roots={carrefour:'https://www.carrefour.ke/mafken/en',quickmart:'https://www.quickmart.co.ke/',naivas:'https://www.naivas.online/',foodplus:'https://foodplus.co.ke/'};
 let browser,page,confirmed,initialIdentity,busy=false,resume,starting=true,cartPlan;
 let engine,contextOptions;
 const disconnected=()=>{emit({type:'closed'});process.exit(0);};
 async function showWindow() {
   if(!headless){await page.bringToFront();return;}
   const next=await openBrowserSession({browser,page,
-    launch:()=>engine.launch({headless:false,...(setup.store==='quickmart'?{channel:'chromium'}:{})}),
+    launch:()=>engine.launch({headless:false,...(['quickmart','foodplus'].includes(setup.store)?{channel:'chromium'}:{})}),
     contextOptions,origin:new URL(roots[setup.store]).origin,
     verify:async candidate=>{
       if(confirmed) {
@@ -69,7 +69,7 @@ async function locateAutomatically(reload=false) {
     try {
       if(attempt || reload) {
         emit({type:'setup',status:'opening',stage:'loading_store',message:locationProgress('loading_store')});
-        try {await navigate(setup.store==='carrefour'?roots.carrefour+'/search?keyword=milk':setup.store==='quickmart'?roots.quickmart+'shops/products/1/keyword-milk':roots.naivas+'search?term=milk');}
+        try {await navigate(setup.store==='carrefour'?roots.carrefour+'/search?keyword=milk':setup.store==='quickmart'?roots.quickmart+'shops/products/1/keyword-milk':setup.store==='foodplus'?roots.foodplus+'catalogsearch/result/?q=milk':roots.naivas+'search?term=milk');}
         catch(error){error.locationStage='loading_store';throw error;}
       }
       const {confirmation,...identity}=await selectAutomaticLocation(page,setup.store,setup.coordinates,navigate,stage=>emit({type:'setup',status:'opening',stage,message:locationProgress(stage)}));
@@ -127,16 +127,18 @@ input.on('line',async line=>{
       await assertLocation();
       const url=setup.store==='quickmart'
         ? 'https://www.quickmart.co.ke/shops/products/'+confirmed.branch_id+'/keyword-'+encodeURIComponent(message.query)
-        : roots[setup.store]+(setup.store==='naivas'?'search?term=':'/search?keyword=')+encodeURIComponent(message.query);
+        : roots[setup.store]+(setup.store==='foodplus'?'catalogsearch/result/?q=':setup.store==='naivas'?'search?term=':'/search?keyword=')+encodeURIComponent(message.query);
       await navigate(url);
       await assertLocation();
       await page.locator(setup.store==='quickmart'
         ? '#products-listing .productInfoJs, #frmProductSearchPaging input[name="recordDisplayCount"][value="0"]'
         : setup.store==='naivas' ? 'div.border-naivas-bg a span.line-clamp-2, h2:has-text("0 Search Results Found")'
+        : setup.store==='foodplus' ? '.products-grid li.product-item, .message.notice:has-text("Your search returned no results")'
         : 'div.group a[href*="/p/"] span.line-clamp-2, img[src*="no-result-found.svg"]').first().waitFor({state:'attached',timeout:15000});
       await assertLocation();
       emit({type:'reply',id:message.id,html:await page.content()});
     } else if(message.action==='cart') {
+      if(setup.store==='foodplus')throw Error('checkout_unavailable');
       if(message.plan.store!==setup.store || !Array.isArray(message.plan.products) || !message.plan.products.length)throw Error('invalid_basket');
       const domain=new URL(roots[setup.store]).hostname;
       for (const p of message.plan.products) {
@@ -167,8 +169,8 @@ input.on('close',async()=>{await browser?.close();process.exit(0);});
 try {
   if(!roots[setup.store] || typeof setup.area!=='string' || setup.area.length>200)throw Error('invalid_setup');
   const {firefox,chromium}=await import('playwright');
-  engine=setup.store==='quickmart'?chromium:firefox;
-  browser=await engine.launch({headless,...(setup.store==='quickmart'?{channel:'chromium'}:{})});
+  engine=['quickmart','foodplus'].includes(setup.store)?chromium:firefox;
+  browser=await engine.launch({headless,...(['quickmart','foodplus'].includes(setup.store)?{channel:'chromium'}:{})});
   browser.on('disconnected',disconnected);
   const point=setup.coordinates;
   if(point && (![point.latitude,point.longitude,point.accuracy].every(Number.isFinite)||Math.abs(point.latitude)>90||Math.abs(point.longitude)>180||point.accuracy<0))throw Error('invalid_setup');
@@ -178,7 +180,7 @@ try {
   page=await context.newPage();
   if(point)emit({type:'setup',status:'opening',stage:'loading_store',message:locationProgress('loading_store')});
   for(let attempt=0;attempt<2;attempt++) {
-    try {await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : roots.naivas+'search?term=milk');break;}
+    try {await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : setup.store==='foodplus'?roots.foodplus+'catalogsearch/result/?q=milk':roots.naivas+'search?term=milk');break;}
     catch(error){if(attempt===1){error.locationStage='loading_store';throw error;}}
   }
   try { initialIdentity=await identity(true); } catch {}

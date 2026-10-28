@@ -9,7 +9,7 @@ defmodule DealAgentWeb.ShopperLive do
   alias DealAgent.Shopping.Selection
   alias DealAgent.Shopping.Item
   alias DealAgent.Shopping.ShoppingList
-  alias DealAgent.Supermarkets.{Carrefour, Quickmart, Naivas}
+  alias DealAgent.Supermarkets.{Carrefour, Quickmart, Naivas, Foodplus}
 
   @stores [
     %{
@@ -35,6 +35,14 @@ defmodule DealAgentWeb.ShopperLive do
       results_key: :naivas_results,
       selections_key: :naivas_selections,
       options_key: :naivas_search_options
+    },
+    %{
+      id: "foodplus",
+      label: "Foodplus",
+      adapter: Foodplus,
+      results_key: :foodplus_results,
+      selections_key: :foodplus_selections,
+      options_key: :foodplus_search_options
     }
   ]
 
@@ -53,6 +61,8 @@ defmodule DealAgentWeb.ShopperLive do
      |> assign(:units, Item.units())
      |> assign(:messages, [])
      |> assign(:agent_status, :idle)
+     |> assign(:foodplus_selections, %{})
+     |> assign(:foodplus_results, %{})
      |> assign(:naivas_selections, %{})
      |> assign(:naivas_results, %{})
      |> assign(:quickmart_selections, %{})
@@ -226,6 +236,15 @@ defmodule DealAgentWeb.ShopperLive do
       _ ->
         {:noreply, socket}
     end
+  end
+
+  def handle_event("shop-now", %{"store" => "foodplus"}, socket) do
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       "Foodplus checkout is unavailable. Its website currently reports maintenance; you can still compare prices and select products."
+     )}
   end
 
   @impl true
@@ -1155,6 +1174,8 @@ defmodule DealAgentWeb.ShopperLive do
   defp search_error_message(reason, store),
     do: String.replace(search_error_message(reason), "Carrefour", store.label)
 
+  defp store_search_url(%{id: "foodplus"}, query), do: Foodplus.Client.search_url(query)
+
   defp store_search_url(%{id: "naivas"}, query), do: Naivas.Client.search_url(query)
   defp store_search_url(%{id: "quickmart"}, query), do: Quickmart.Client.search_url(query)
   defp store_search_url(_, query), do: Carrefour.Client.search_url(query)
@@ -1265,6 +1286,8 @@ defmodule DealAgentWeb.ShopperLive do
     |> assign(:messages, socket.assigns.messages ++ [user_message])
     |> assign(:shopping_list, ShoppingList.new())
     |> prune_search_results()
+    |> assign(:foodplus_selections, %{})
+    |> assign(:foodplus_results, %{})
     |> assign(:naivas_selections, %{})
     |> assign(:naivas_results, %{})
     |> assign(:quickmart_selections, %{})

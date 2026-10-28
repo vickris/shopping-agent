@@ -1,5 +1,6 @@
 // Store adapters use visible storefront controls only. Never submit checkout.
 export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
+  if(!['quickmart','naivas'].includes(plan.store))throw Error('checkout_unavailable');
   const price = text => cents(text.replace(/KES|KSh|\s|,/gi, ''));
   const wait = async predicate => {
     for (let i = 0; i < 80; i++) {
@@ -76,6 +77,7 @@ export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
 
 // Read-only verification also used after opening a prepared guest session.
 export async function verifyStoreCart({page,plan,cents}) {
+  if(!['quickmart','naivas'].includes(plan.store))throw Error('checkout_unavailable');
   const price = text => cents(text.replace(/KES|KSh|\s|,/gi, ''));
   const wait = async predicate => {
     for(let i=0;i<80;i++) {

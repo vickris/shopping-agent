@@ -186,3 +186,30 @@ instead of the landmark selected in autocomplete. When the names differ, the
 runner reopens the store map without saving another address, verifies the saved
 alias within 2 km of the supplied coordinates, closes the unsaved form and
 checks persistence. No estate names or coordinates are hardcoded into the app.
+
+## Foodplus comparison
+
+Foodplus (Chandarana) is the fourth comparison column. Searches scrape its public
+Magento listing in a temporary headless Chromium session. The homepage geolocation
+flow selects a branch; the adapter checks its visible branch against Foodplus's
+GPS resolver and verifies that it survives navigation. It never accepts the
+unselected “Main Website Store” catalogue as a confirmed branch. Each store has
+its own search queue, results, in-cell search, selections and totals.
+
+The parser uses `finalPrice` (not a crossed-out price), explicit title pack sizes
+and each card's Add availability. Unknown/ambiguous sizes remain unknown and can
+still be selected with a manually reviewed pack count. Only the first results
+page is returned, without automatically loading the full catalogue.
+
+Live verification on 28 October 2026 returned 33 milk search results after native
+GPS branch selection using the public Greatwall Gardens 3 estate centre. Foodplus
+currently exposes only **The Stop @Rhapta Branch** online and displays a notice
+that checkout is disabled for maintenance. Its column therefore supports price
+comparison and selection, but **Shop now is disabled**; there is no Foodplus cart
+adapter or verified checkout handoff yet. Native nearest-branch selection does
+not establish delivery coverage. Review Foodplus's coverage when checkout returns.
+Recheck the storefront and implement/verify its cart controls before enabling it.
+
+After updating a running development server, reload the homepage and refresh your
+location to create the additional Foodplus session. No restart or credentials are
+needed for public searches.

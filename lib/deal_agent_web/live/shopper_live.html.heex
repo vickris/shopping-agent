@@ -53,7 +53,7 @@
         Refresh my location
       </button>
       <p class="mt-2 text-sm text-gray-600">
-        Allow location access to find the service area or nearby branch for each supermarket. Your coordinates are shared with Carrefour, Quickmart, Naivas and their map providers in temporary store sessions.
+        Allow location access to find the service area or nearby branch for each supermarket. Your coordinates are shared with Carrefour, Quickmart, Naivas, Foodplus and their map providers in temporary store sessions.
       </p>
       <p
         data-location-progress
@@ -79,7 +79,7 @@
       <summary class="cursor-pointer text-sm text-gray-600">
         Store status and optional location settings
       </summary>
-      <div class="mt-4 grid gap-4 md:grid-cols-3">
+      <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div
           :for={store <- @stores}
           id={"#{store.id}-delivery"}
@@ -274,12 +274,12 @@
     <div class="comparison-workspace">
       <section :if={ShoppingList.empty?(@shopping_list)} class="comparison-empty">
         <div class="empty-store-labels">
-          <span>Carrefour</span><span>Quickmart</span><span>Naivas</span>
+          <span :for={store <- @stores}>{store.label}</span>
         </div>
         <div class="empty-illustration" aria-hidden="true">
           <.icon name="hero-squares-2x2" class="h-10 w-10" />
         </div>
-        <p class="eyebrow">THREE STORES. ONE CLEAR VIEW.</p>
+        <p class="eyebrow">FOUR STORES. ONE CLEAR VIEW.</p>
         <h2>Your next shop, side by side.</h2>
         <p>
           Add your first item in chat to see available products, choose your favourites, and build a total for each supermarket.
@@ -309,7 +309,7 @@
                   scope="col"
                   class={"store-heading store-#{store.id} px-4 py-3 font-semibold"}
                 >
-                  <span class="store-dot" aria-hidden="true"></span>{store.label}<span class="block text-xs font-normal text-gray-500">{if @delivery_sessions[store.id], do: @delivery_sessions[store.id].area, else: "Delivery not confirmed"}</span>
+                  <span class="store-dot" aria-hidden="true"></span>{store.label}<span class="block text-xs font-normal text-gray-500">{if @delivery_sessions[store.id], do: @delivery_sessions[store.id].label || @delivery_sessions[store.id].area, else: "Delivery not confirmed"}</span>
                 </th>
               </tr>
             </thead>
@@ -557,19 +557,26 @@
                   <p :if={total.unresolved > 0} class="mt-1 text-sm text-gray-600">
                     {total.unresolved} unselected item(s) will be skipped
                   </p>
+                  <p
+                    :if={store.id == "foodplus"}
+                    id="foodplus-checkout-notice"
+                    class="mt-2 text-xs text-amber-800"
+                  >
+                    Foodplus checkout is unavailable while its website reports maintenance. Prices and selections are available for comparison. Its online shop currently offers The Stop @Rhapta branch; delivery to your address still needs verification.
+                  </p>
                   <% cart_job = @cart_jobs[store.id] %>
                   <button
                     phx-click="shop-now"
                     phx-value-store={store.id}
                     class="shop-now"
                     disabled={
-                      total.unresolved == length(@shopping_list.items) or
+                      store.id == "foodplus" or total.unresolved == length(@shopping_list.items) or
                         (cart_job && cart_job.status != "closed")
                     }
                   >
                     Shop now
                   </button>
-                  <p class="mt-2 text-xs text-gray-500">
+                  <p :if={store.id != "foodplus"} class="mt-2 text-xs text-gray-500">
                     Prepares your basket in the background. Open it on this computer to review and pay.
                   </p>
                   <div
