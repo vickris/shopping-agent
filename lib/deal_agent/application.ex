@@ -7,29 +7,43 @@ defmodule DealAgent.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      {DealAgent.Supermarkets.SearchQueue, :carrefour},
-      {DealAgent.Supermarkets.SearchQueue, :quickmart},
-      {DealAgent.Supermarkets.SearchQueue, :naivas},
-      {DealAgent.Supermarkets.SearchQueue, :foodplus},
-      {DealAgent.Checkout.CartJobs, []},
-      {DealAgent.Delivery.Sessions, []},
-      DealAgentWeb.Telemetry,
-      DealAgent.Repo,
-      {DNSCluster, query: Application.get_env(:deal_agent, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: DealAgent.PubSub},
-      # Start the Finch HTTP client for sending emails
-      {Finch, name: DealAgent.Finch},
-      # Start a worker by calling: DealAgent.Worker.start_link(arg)
-      # {DealAgent.Worker, arg},
-      # Start to serve requests, typically the last entry
-      DealAgentWeb.Endpoint
-    ]
+    children =
+      [
+        {DealAgent.Supermarkets.SearchQueue, :carrefour},
+        {DealAgent.Supermarkets.SearchQueue, :quickmart},
+        {DealAgent.Supermarkets.SearchQueue, :naivas},
+        {DealAgent.Supermarkets.SearchQueue, :foodplus},
+        {DealAgent.Checkout.CartJobs, []},
+        {DealAgent.Delivery.Sessions, []},
+        DealAgentWeb.Telemetry,
+        DealAgent.Repo,
+        {DNSCluster, query: Application.get_env(:deal_agent, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: DealAgent.PubSub},
+        # Start the Finch HTTP client for sending emails
+        {Finch, name: DealAgent.Finch},
+        # Start a worker by calling: DealAgent.Worker.start_link(arg)
+        # {DealAgent.Worker, arg},
+        # Start to serve requests, typically the last entry
+        DealAgentWeb.Endpoint
+      ] ++ agent_trace_children()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: DealAgent.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp agent_trace_children do
+    if Application.get_env(:deal_agent, :agent_trace_database, false) do
+      options =
+        DealAgent.Repo.config()
+        |> Keyword.take([:hostname, :port, :database, :username, :password, :ssl, :socket_options])
+        |> Keyword.put(:name, DealAgent.AgentTracePostgres)
+
+      [{Postgrex, options}]
+    else
+      []
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

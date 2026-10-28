@@ -94,10 +94,31 @@ defmodule DealAgent.LLM.OpenAITest do
   end
 
   test "tool results finish locally without issuing a second model request" do
-    assert {:reply, "Shopping intent captured."} =
+    assert {:reply, "Shopping intent captured.", %{input_tokens: 0, output_tokens: 0}} =
              OpenAI.chat(
                [%{role: :tool, type: :tool_result, call_id: "call_1", content: "captured"}],
                []
+             )
+  end
+
+  test "passes provider token usage to BeamAgent without response details" do
+    plug = fn conn ->
+      Req.Test.json(conn, %{
+        "output" => [
+          %{"type" => "message", "content" => [%{"type" => "output_text", "text" => "Hello"}]}
+        ],
+        "usage" => %{
+          "input_tokens" => 123,
+          "output_tokens" => 17,
+          "output_tokens_details" => %{"reasoning_tokens" => 8}
+        }
+      })
+    end
+
+    assert {:reply, "Hello", %{input_tokens: 123, output_tokens: 17}} =
+             OpenAI.chat([%{role: :user, content: "hello"}],
+               api_key: "test",
+               request_options: [plug: plug]
              )
   end
 

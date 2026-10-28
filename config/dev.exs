@@ -65,6 +65,15 @@ config :deal_agent, DealAgentWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :deal_agent, dev_routes: true
 
+# Local-only operational history. No prompts or tool payloads are persisted.
+config :deal_agent, :agent_trace_database, true
+config :beam_agent, :dashboard, port: 4080
+
+config :beam_agent, :trace_store,
+  adapter: BeamAgent.Trace.Store.Postgres,
+  retention_ms: :timer.hours(24),
+  options: [connection: DealAgent.AgentTracePostgres]
+
 # JSON formatting and structured BeamAgent metadata are configured in config.exs.
 
 # Set a higher stacktrace during development. Avoid configuring such

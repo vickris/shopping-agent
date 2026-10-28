@@ -8,8 +8,12 @@ defmodule DealAgent.LLM.OpenAI do
     # Intent capture is the entire model task. Complete locally after the tool
     # result; the domain handler supplies the shopper's reply.
     case List.last(messages) do
-      %{type: :tool_result} -> {:reply, "Shopping intent captured."}
-      _ -> request_intent(messages, opts)
+      %{type: :tool_result} ->
+        # This completion is local: it makes no provider request.
+        {:reply, "Shopping intent captured.", %{input_tokens: 0, output_tokens: 0}}
+
+      _ ->
+        request_intent(messages, opts)
     end
   end
 
@@ -88,7 +92,7 @@ defmodule DealAgent.LLM.OpenAI do
 
     case Req.post(request_options) do
       {:ok, %{status: 200, body: body}} ->
-        decode_response(body)
+        with_usage(decode_response(body), body)
 
       {:ok, response} ->
         {:error, {:openai_http_error, response.status, response.body}}
@@ -97,6 +101,16 @@ defmodule DealAgent.LLM.OpenAI do
         {:error, {:openai_request_failed, reason}}
     end
   end
+
+  defp with_usage({kind, payload}, %{
+         "usage" => %{"input_tokens" => input, "output_tokens" => output}
+       })
+       when kind in [:reply, :tool_call] and is_integer(input) and input >= 0 and
+              is_integer(output) and output >= 0 do
+    {kind, payload, %{input_tokens: input, output_tokens: output}}
+  end
+
+  defp with_usage(response, _body), do: response
 
   defp encode_messages(messages) do
     Enum.map(messages, &encode_message/1)

@@ -23,13 +23,29 @@ data. User selection and deterministic arithmetic produce the totals.
 7. Selecting a product highlights the choice. Pack counts and selected subtotals
    are calculated in Elixir, including a count of unresolved rows.
 
-![Observed local intent and comparison state](images/prose-intent-comparison.jpg)
+![Live location, search and selection flow](images/live-carrefour-flow.gif)
 
-The screenshot shows steps 1–5 in the UI. Browser location permission was denied,
-so steps 6–7 are not demonstrated in this capture. This is real application state,
-not a seeded results screen. The capture alone does not prove which provider or
-fallback produced the intent. A working provider key and confirmed delivery
-location are needed for a fresh end-to-end live-search demonstration.
+The recorded live example uses a single item: “2 litres of milk. Compare
+Carrefour.” It exercises intent capture, real store location confirmation,
+search, selection and totals. Playwright supplies simulated GPS at the public
+Greatwall Gardens/Pridelands estate centre, with the user's permission. No store
+responses or model outputs are replaced. Carrefour's displayed confirmed label
+was “Machakos County, Kenya”; that broad label is not a final checkout address.
+
+On 28 October 2026 the search returned 60 candidates. Selecting Brookside UHT
+Whole Milk 250 ml at KES 46 produced eight packs, totaling KES 368. The associated
+completed BeamAgent run reported 750 tokens and passed verification with complete
+stored evidence. Prices and result counts are observations at capture time.
+The GIF samples actual browser screenshots and accelerates waiting.
+
+![Selected live basket](images/live-carrefour-basket.jpg)
+
+![Actual BeamAgent runs and token usage](images/agent-run-monitor.gif)
+
+The monitor capture follows another real chat request from active execution into
+completed history. The dashboard is the package's own local listener, not a
+recreation. Token figures come from OpenAI response usage; the capture does not
+use BeamAgent's fixture/demo script. No checkout or payment is performed.
 
 ## What tool calling means here
 
@@ -120,8 +136,18 @@ there is no documented automatic end-to-end trace join between them.
 
 The logging allowlist excludes prompts, tool arguments/results and coordinates
 from these structured records. It is not a universal sanitizer for arbitrary log
-messages. Token accounting, cost reporting, persistent trace history and the
-BeamAgent dashboard are not enabled by this logging configuration.
+messages. Development mode separately enables the BeamAgent dashboard on
+`127.0.0.1:4080` and sanitized PostgreSQL evidence with 24-hour retention. Run the
+Ecto migrations before starting it. Production retains the logging setup without
+enabling this local dashboard or history connection.
+
+The OpenAI adapter forwards provider-reported input/output usage to BeamAgent.
+The local acknowledgement after intent capture supplies zero usage because no
+provider call occurs; BeamAgent still counts this local client invocation among
+its model-call steps. The completed dashboard's token total is provider input
+plus output, not an estimate from the shopping text. Without a configured model
+price schedule, cost remains **Unknown**. Expired evidence is hidden immediately;
+physical cleanup uses `BeamAgent.Trace.Store.prune_expired/0`.
 
 ## Implementation and checks
 

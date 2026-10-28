@@ -9,17 +9,24 @@ Results depend on the store's availability and delivery-location confirmation.
 
 ## See the app
 
-![Chat input and intent capture in the running app](docs/images/prose-shopping-flow.gif)
+![Live Carrefour search, product selection and calculated total](docs/images/live-carrefour-flow.gif)
 
-This GIF shows a real local UI session: entering two items and selecting Naivas
-and Carrefour through prose. Location permission was denied in the capture, so
-searches wait for location setup. It does **not** demonstrate retrieved prices,
-checkout, or independently verified live OpenAI execution. Pauses are shortened.
-No sample product prices are injected into these images.
+Recorded against the running app on 28 October 2026 using real OpenAI and
+Carrefour responses. Playwright supplies simulated GPS for the public Greatwall
+Gardens/Pridelands area; store confirmation and product data are live. Carrefour
+returned 60 candidates. Selecting 250 ml milk at KES 46 produced eight packs and
+a KES 368 total for the 2-litre request. Prices are capture-time observations.
+Waiting is accelerated; no product responses or token counts are mocked.
 
-![The shopping workspace before adding items](docs/images/shopping-workspace.jpg)
+![BeamAgent's real run monitor](docs/images/agent-run-monitor.gif)
 
-[Full comparison screenshot](docs/images/prose-intent-comparison.jpg) ·
+The separate BeamAgent view shows live execution and retained completed runs,
+with provider-reported tokens, verification and evidence status. Cost remains
+unknown without an application price schedule. These captures stop at selection
+and observability; they do not demonstrate checkout or payment.
+
+[Selected basket screenshot](docs/images/live-carrefour-basket.jpg) ·
+[Completed runs screenshot](docs/images/completed-agent-runs.jpg) ·
 [Agent flow, tool calling and guardrails](docs/agent-flow.md) ·
 [Render deployment guide](docs/deploy-render.md) ·
 [Online checkout design](docs/online-shopping-flow.md)
@@ -90,9 +97,27 @@ records from a saved console log, filter for a non-null `beam_agent_event` and
 then group lifecycle events by `run_key`.
 
 See the installed package's `deps/beam_agent/README.md` and
-`deps/beam_agent/docs/structured-logging.md`. PostgreSQL trace history, the local
-BeamAgent dashboard, token usage and cost reporting are separate opt-in features;
-this logging setup does not enable them.
+`deps/beam_agent/docs/structured-logging.md`. Development mode also enables the
+local BeamAgent dashboard and sanitized PostgreSQL history described below.
+The production beta does not enable these local-only features.
+
+## Completed agent runs and token usage
+
+Run `mix ecto.migrate`, restart Phoenix, then open
+[BeamAgent run monitor](http://127.0.0.1:4080/). Submit shopping requests in the
+app; active runs appear while executing, and completed summaries include
+verification, total provider-reported tokens and evidence status. The adapter
+forwards OpenAI input/output usage; it never estimates tokens from text. Its
+local acknowledgement reports zero tokens because it makes no provider request.
+Missing provider usage remains unknown.
+
+The dashboard is BeamAgent's separate loopback-only listener, not Phoenix's
+`/dev/dashboard`. History is retained for 24 hours in the development database;
+expired records are hidden. To physically remove expired evidence, run
+`mix run -e 'BeamAgent.Trace.Store.prune_expired()'`. Stored summaries and trace
+steps omit prompts, shopping items, tool payloads and credentials. Cost stays
+**Unknown** until an application-owned, versioned model price schedule is set.
+The dashboard is not exposed on the Render service.
 
 ## Supermarket search logging
 
