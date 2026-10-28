@@ -52,6 +52,10 @@ defmodule DealAgentWeb.ShopperLive do
 
     {:ok,
      socket
+     |> assign(
+       :local_browser_enabled,
+       Application.get_env(:deal_agent, :local_browser_enabled, true)
+     )
      |> assign(:shopping_list, ShoppingList.new())
      |> assign(:cart_jobs, %{})
      |> assign(:candidate_filters, %{})
@@ -151,6 +155,20 @@ defmodule DealAgentWeb.ShopperLive do
            "The browser returned an invalid location. Try again or enter an area below."
          )}
     end
+  end
+
+  def handle_event(event, _params, %{assigns: %{local_browser_enabled: false}} = socket)
+      when event in ["shop-now", "setup-delivery"] do
+    online_preview_unavailable(socket)
+  end
+
+  def handle_event(
+        event,
+        %{"action" => action},
+        %{assigns: %{local_browser_enabled: false}} = socket
+      )
+      when event in ["delivery-window", "cart-window"] and action in ["open", "confirm", "resume"] do
+    online_preview_unavailable(socket)
   end
 
   def handle_event("setup-delivery", %{"store" => store_id, "area" => area} = params, socket) do
@@ -627,6 +645,15 @@ defmodule DealAgentWeb.ShopperLive do
      socket
      |> append_assistant_message("Something went wrong while processing your request.")
      |> assign(:agent_status, :idle)}
+  end
+
+  defp online_preview_unavailable(socket) do
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       "This online preview supports comparison and selection. Store-window setup and checkout are not enabled yet."
+     )}
   end
 
   defp store_for(params),

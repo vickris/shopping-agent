@@ -38,3 +38,8 @@ npm-debug.log
 
 # Carrefour browser runtime installed with npm
 /priv/carrefour_browser/node_modules/
+
+# Local deployment credentials
+.env
+.env.*
+!.env.example

@@ -33,7 +33,8 @@ defmodule DealAgent.Delivery.Sessions do
       Enum.any?(sessions, fn {_, s} -> s.owner == owner and s.store == store end) ->
         {:reply, {:error, :session_exists}, sessions}
 
-      map_size(sessions) >= 2 * length(@stores) ->
+      map_size(sessions) >=
+          Application.get_env(:deal_agent, :max_browser_sessions, 2 * length(@stores)) ->
         {:reply, {:error, :session_capacity}, sessions}
 
       true ->

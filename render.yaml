@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: deal-agent-beta
+    runtime: docker
+    region: frankfurt
+    # Paid compute: review the price in Render before creating the Blueprint.
+    # Headless browsers need more memory than an Elixir-only app. Measure before scaling.
+    plan: 2c-4g
+    numInstances: 1
+    dockerfilePath: ./Dockerfile
+    autoDeployTrigger: "off"
+    healthCheckPath: /health
+    preDeployCommand: /app/bin/migrate
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deal-agent-beta-db
+          property: connectionString
+      - key: SECRET_KEY_BASE
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BETA_PASSWORD
+        generateValue: true
+      - key: BETA_USERNAME
+        value: friends
+      - key: LOCAL_BROWSER_ENABLED
+        value: "false"
+      - key: MAX_BROWSER_SESSIONS
+        value: "8"
+      - key: POOL_SIZE
+        value: "5"
+      - key: PORT
+        value: "4000"
+      - key: ERL_FLAGS
+        value: "+S 2:2"
+
+databases:
+  - name: deal-agent-beta-db
+    region: frankfurt
+    # Suitable only for the beta: Render free databases expire after 30 days.
+    plan: free
+    databaseName: deal_agent
+    user: deal_agent
+    ipAllowList: []

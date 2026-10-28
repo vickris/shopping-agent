@@ -3,6 +3,7 @@ defmodule DealAgentWeb.Router do
 
   pipeline :browser do
     plug :accepts, ["html"]
+    plug DealAgentWeb.Plugs.BetaAccess
     plug :fetch_session
     plug :fetch_live_flash
     plug :put_root_layout, html: {DealAgentWeb.Layouts, :root}
@@ -12,6 +13,11 @@ defmodule DealAgentWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+  end
+
+  scope "/", DealAgentWeb do
+    pipe_through :api
+    get "/health", HealthController, :show
   end
 
   scope "/", DealAgentWeb do

@@ -145,6 +145,7 @@
               Retry automatically
             </button>
             <button
+              :if={@local_browser_enabled}
               phx-click="delivery-window"
               phx-value-action="open"
               phx-value-store={store.id}
@@ -162,7 +163,15 @@
             </button>
           <% else %>
             <p class="mt-1 text-sm text-gray-500">Delivery not confirmed</p>
-            <form id={"#{store.id}-delivery-form"} phx-submit="setup-delivery" class="mt-2">
+            <p :if={!@local_browser_enabled} class="mt-2 text-xs text-gray-500">
+              Allow browser location access to search this store in the online preview.
+            </p>
+            <form
+              :if={@local_browser_enabled}
+              id={"#{store.id}-delivery-form"}
+              phx-submit="setup-delivery"
+              class="mt-2"
+            >
               <input type="hidden" name="store" value={store.id} />
               <label for={"#{store.id}-delivery-area"} class="sr-only">
                 Delivery area for {store.label}
@@ -570,14 +579,19 @@
                     phx-value-store={store.id}
                     class="shop-now"
                     disabled={
-                      store.id == "foodplus" or total.unresolved == length(@shopping_list.items) or
+                      !@local_browser_enabled or store.id == "foodplus" or
+                        total.unresolved == length(@shopping_list.items) or
                         (cart_job && cart_job.status != "closed")
                     }
                   >
-                    Shop now
+                    {if @local_browser_enabled, do: "Shop now", else: "Checkout unavailable"}
                   </button>
                   <p :if={store.id != "foodplus"} class="mt-2 text-xs text-gray-500">
-                    Prepares your basket in the background. Open it on this computer to review and pay.
+                    <%= if @local_browser_enabled do %>
+                      Prepares your basket in the background. Open it on this computer to review and pay.
+                    <% else %>
+                      Compare prices and select products. Online checkout is coming later.
+                    <% end %>
                   </p>
                   <div
                     :if={cart_job}
