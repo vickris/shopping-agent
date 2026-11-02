@@ -46,7 +46,7 @@ defmodule DealAgent.Supermarkets.BrowserClient do
             do: [script, query],
             else: [script, query, Atom.to_string(store)]
           ),
-          env: [{"OPENAI_API_KEY", nil}, {"ANTHROPIC_API_KEY", nil}],
+          env: [{"OPENAI_API_KEY", nil}, {"ANTHROPIC_API_KEY", nil}, {"OPENROUTER_API_KEY", nil}],
           stderr_to_stdout: true
         )
 

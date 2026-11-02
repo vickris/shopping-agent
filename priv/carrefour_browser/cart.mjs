@@ -4,6 +4,7 @@ import readline from "node:readline";
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= "0";
 delete process.env.OPENAI_API_KEY;
 delete process.env.ANTHROPIC_API_KEY;
+delete process.env.OPENROUTER_API_KEY;
 const input = readline.createInterface({ input: process.stdin });
 const plan = await new Promise(resolve => input.once("line", line => resolve(JSON.parse(line))));
 let browser, page, resume, pauseStep, finished = false, phase = "launch";

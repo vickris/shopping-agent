@@ -10,7 +10,12 @@ defmodule DealAgent.Checkout.CartRuntime do
          :exit_status,
          {:line, 65_536},
          {:args, [String.to_charlist(script)]},
-         {:env, [{~c"OPENAI_API_KEY", false}, {~c"ANTHROPIC_API_KEY", false}]}
+         {:env,
+          [
+            {~c"OPENAI_API_KEY", false},
+            {~c"ANTHROPIC_API_KEY", false},
+            {~c"OPENROUTER_API_KEY", false}
+          ]}
        ])}
     else
       _ -> {:error, :browser_dependency_missing}

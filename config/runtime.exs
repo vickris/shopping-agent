@@ -24,6 +24,18 @@ config :deal_agent,
        :openai_api_key,
        System.get_env("OPENAI_API_KEY")
 
+provider =
+  case System.get_env("LLM_PROVIDER", "openai") do
+    "openai" -> :openai
+    "openrouter" -> :openrouter
+    _ -> raise "LLM_PROVIDER must be openai or openrouter"
+  end
+
+config :deal_agent,
+  llm_provider: provider,
+  openrouter_api_key: System.get_env("OPENROUTER_API_KEY"),
+  openrouter_model: System.get_env("OPENROUTER_MODEL", "openai/gpt-4.1-mini")
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

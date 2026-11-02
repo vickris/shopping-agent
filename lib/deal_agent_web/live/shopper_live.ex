@@ -670,6 +670,31 @@ defmodule DealAgentWeb.ShopperLive do
     "The shopper assistant is not configured yet. Please set OPENAI_API_KEY and restart the server."
   end
 
+  defp agent_error_message(:missing_openrouter_api_key),
+    do: "Set OPENROUTER_API_KEY and restart the server to use OpenRouter."
+
+  defp agent_error_message({:openrouter_request_failed, %Req.TransportError{}}),
+    do: "The OpenRouter connection failed. Please try again."
+
+  defp agent_error_message({:openrouter_http_error, status, _body}) do
+    cond do
+      status == 402 ->
+        "OpenRouter credits or the key's spending limit have been exhausted. Check OpenRouter billing and key limits."
+
+      status in [401, 403] ->
+        "OpenRouter rejected the API key or access permissions. Check OPENROUTER_API_KEY."
+
+      status == 429 ->
+        "OpenRouter is rate limiting requests. Please try again shortly."
+
+      status >= 500 ->
+        "OpenRouter is temporarily unavailable. Please try again later."
+
+      true ->
+        "OpenRouter rejected the request (HTTP #{status}). Check OPENROUTER_MODEL and its tool-calling support."
+    end
+  end
+
   defp agent_error_message({:openai_request_failed, %Req.TransportError{reason: reason}}) do
     "The OpenAI connection failed (#{reason}). Your request has not been added. Please try again or use the Add form above."
   end

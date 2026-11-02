@@ -76,8 +76,8 @@ defmodule DealAgent.LLM.OpenAI do
     request_options =
       Keyword.merge(
         [
-          url: @endpoint,
-          json: body,
+          url: endpoint(opts),
+          json: provider_body(body, opts),
           headers: [{"authorization", "Bearer #{api_key}"}],
           receive_timeout: 30_000,
           retry: fn
@@ -95,10 +95,35 @@ defmodule DealAgent.LLM.OpenAI do
         with_usage(decode_response(body), body)
 
       {:ok, response} ->
-        {:error, {:openai_http_error, response.status, response.body}}
+        {:error, {error_tag(opts, :http), response.status, response.body}}
 
       {:error, reason} ->
-        {:error, {:openai_request_failed, reason}}
+        {:error, {error_tag(opts, :transport), reason}}
+    end
+  end
+
+  defp endpoint(opts) do
+    case Keyword.get(opts, :provider, :openai) do
+      :openrouter -> "https://openrouter.ai/api/v1/responses"
+      :openai -> @endpoint
+    end
+  end
+
+  defp provider_body(body, opts) do
+    if Keyword.get(opts, :provider, :openai) == :openrouter do
+      # Do not require reasoning support from non-reasoning models.
+      body |> Map.delete(:reasoning) |> Map.put(:provider, %{require_parameters: true})
+    else
+      body
+    end
+  end
+
+  defp error_tag(opts, kind) do
+    case {Keyword.get(opts, :provider, :openai), kind} do
+      {:openrouter, :http} -> :openrouter_http_error
+      {:openrouter, :transport} -> :openrouter_request_failed
+      {:openai, :http} -> :openai_http_error
+      {:openai, :transport} -> :openai_request_failed
     end
   end
 

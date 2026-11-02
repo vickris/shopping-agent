@@ -13,6 +13,7 @@ import {readLocation, confirmLocation, confirmationError} from './delivery_locat
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 delete process.env.OPENAI_API_KEY;
 delete process.env.ANTHROPIC_API_KEY;
+delete process.env.OPENROUTER_API_KEY;
 export async function runSession({input,emit,onSetup,onError,headless=true}) {
 const setup = await new Promise(resolve=>input.once('line',line=>resolve(JSON.parse(line))));
 const roots={carrefour:'https://www.carrefour.ke/mafken/en',quickmart:'https://www.quickmart.co.ke/',naivas:'https://www.naivas.online/',foodplus:'https://foodplus.co.ke/'};

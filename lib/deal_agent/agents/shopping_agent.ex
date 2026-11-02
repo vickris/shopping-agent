@@ -25,7 +25,8 @@ defmodule DealAgent.Agents.ShoppingAgent do
     result = interpret_with_llm(input, llm)
 
     case result do
-      {:error, {:openai_request_failed, %Req.TransportError{}}} ->
+      {:error, {tag, %Req.TransportError{}}}
+      when tag in [:openai_request_failed, :openrouter_request_failed] ->
         case DealAgent.Shopping.CommandParser.parse(input) do
           {:ok, intent} -> {:ok, intent}
           _ -> result
@@ -80,8 +81,13 @@ defmodule DealAgent.Agents.ShoppingAgent do
 
   defp validate_llm({DealAgent.LLM.OpenAI, opts}) do
     case Keyword.get(opts, :api_key) do
-      key when is_binary(key) and byte_size(key) > 0 -> :ok
-      _ -> {:error, :missing_openai_api_key}
+      key when is_binary(key) and byte_size(key) > 0 ->
+        :ok
+
+      _ ->
+        if Keyword.get(opts, :provider) == :openrouter,
+          do: {:error, :missing_openrouter_api_key},
+          else: {:error, :missing_openai_api_key}
     end
   end
 
@@ -92,20 +98,20 @@ defmodule DealAgent.Agents.ShoppingAgent do
   end
 
   defp openai_llm do
-    {
-      DealAgent.LLM.OpenAI,
-      [
-        api_key:
-          Application.fetch_env!(
-            :deal_agent,
-            :openai_api_key
-          ),
-        model: "gpt-5.6-luna",
-        tools: [
-          DealAgent.Tools.CaptureIntent
-        ]
-      ]
-    }
+    provider = Application.get_env(:deal_agent, :llm_provider, :openai)
+
+    {key, model} =
+      case provider do
+        :openrouter ->
+          {Application.get_env(:deal_agent, :openrouter_api_key),
+           Application.get_env(:deal_agent, :openrouter_model, "openai/gpt-4.1-mini")}
+
+        :openai ->
+          {Application.get_env(:deal_agent, :openai_api_key), "gpt-5.6-luna"}
+      end
+
+    {DealAgent.LLM.OpenAI,
+     [api_key: key, model: model, provider: provider, tools: [DealAgent.Tools.CaptureIntent]]}
   end
 
   defp extract_payload(run) do

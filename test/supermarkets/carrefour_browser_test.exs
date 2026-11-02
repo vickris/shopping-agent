@@ -58,7 +58,13 @@ defmodule DealAgent.Supermarkets.CarrefourBrowserTest do
       assert executable == "node-test"
       assert String.ends_with?(script, "/priv/carrefour_browser/search.mjs")
       assert query == "milk & cream"
-      assert opts[:env] == [{"OPENAI_API_KEY", nil}, {"ANTHROPIC_API_KEY", nil}]
+
+      assert opts[:env] == [
+               {"OPENAI_API_KEY", nil},
+               {"ANTHROPIC_API_KEY", nil},
+               {"OPENROUTER_API_KEY", nil}
+             ]
+
       {Jason.encode!(%{html: html}), 0}
     end
 
@@ -100,7 +106,12 @@ defmodule DealAgent.Supermarkets.CarrefourBrowserTest do
     """
 
     runner = fn _, [_, "milk", "quickmart"], opts ->
-      assert opts[:env] == [{"OPENAI_API_KEY", nil}, {"ANTHROPIC_API_KEY", nil}]
+      assert opts[:env] == [
+               {"OPENAI_API_KEY", nil},
+               {"ANTHROPIC_API_KEY", nil},
+               {"OPENROUTER_API_KEY", nil}
+             ]
+
       {Jason.encode!(%{html: html}), 0}
     end
 

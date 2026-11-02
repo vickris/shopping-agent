@@ -14,7 +14,12 @@ defmodule DealAgent.Delivery.Runtime do
            :exit_status,
            {:line, 4_194_304},
            {:args, [String.to_charlist(script)]},
-           {:env, [{~c"OPENAI_API_KEY", false}, {~c"ANTHROPIC_API_KEY", false}]}
+           {:env,
+            [
+              {~c"OPENAI_API_KEY", false},
+              {~c"ANTHROPIC_API_KEY", false},
+              {~c"OPENROUTER_API_KEY", false}
+            ]}
          ])}
     end
   rescue

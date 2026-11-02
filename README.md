@@ -53,6 +53,32 @@ Install Elixir/Erlang, PostgreSQL and Node.js, then:
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
+### Use OpenRouter credits
+
+The same intent tool, BeamAgent guardrails and reported-token tracking work with
+OpenRouter's Responses API. Select the provider explicitly; keys are not
+interchangeable and exhausted OpenAI credit does not trigger automatic switching.
+
+```sh
+export LLM_PROVIDER=openrouter
+export OPENROUTER_MODEL=openai/gpt-4.1-mini
+# Enter your key without displaying it or saving it in shell history:
+read -rs 'OPENROUTER_API_KEY?OpenRouter key: '; echo
+export OPENROUTER_API_KEY
+mix phx.server
+```
+
+The hidden-input command above is for zsh. Restart an already running server in
+that terminal. In Render, set `LLM_PROVIDER`, `OPENROUTER_API_KEY` (secret) and
+`OPENROUTER_MODEL` in the service environment and redeploy the updated code.
+Leave `OPENAI_API_KEY` separate; `LLM_PROVIDER=openai` restores the original path.
+Choose a model/provider supporting required function calls and the strict tool
+schema. OpenRouter errors identify its credentials, credits and rate limits.
+Keys are removed from supermarket worker environments. Cost still remains unknown
+without a configured BeamAgent price schedule.
+
+See [OpenRouter Responses API](https://openrouter.ai/docs/api/reference/responses/overview).
+
 ## Agent run logging
 
 BeamAgent 0.3.x supplies the structured telemetry-to-Logger bridge. It is enabled
