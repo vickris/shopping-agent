@@ -687,6 +687,9 @@ defmodule DealAgentWeb.ShopperLive do
       status == 429 ->
         "OpenRouter is rate limiting requests. Please try again shortly."
 
+      status == 404 ->
+        "OpenRouter found no eligible model endpoint. Check OPENROUTER_MODEL, tool support, and your OpenRouter provider/privacy routing settings."
+
       status >= 500 ->
         "OpenRouter is temporarily unavailable. Please try again later."
 

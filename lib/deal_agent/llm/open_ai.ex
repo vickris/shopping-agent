@@ -111,8 +111,12 @@ defmodule DealAgent.LLM.OpenAI do
 
   defp provider_body(body, opts) do
     if Keyword.get(opts, :provider, :openai) == :openrouter do
-      # Do not require reasoning support from non-reasoning models.
-      body |> Map.delete(:reasoning) |> Map.put(:provider, %{require_parameters: true})
+      # Do not filter out tool-capable providers over optional unsupported flags.
+      # BeamAgent still enforces max_tool_calls: 1 independently of the provider.
+      body
+      |> Map.delete(:reasoning)
+      |> Map.delete(:parallel_tool_calls)
+      |> Map.put(:provider, %{require_parameters: true})
     else
       body
     end

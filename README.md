@@ -74,6 +74,10 @@ that terminal. In Render, set `LLM_PROVIDER`, `OPENROUTER_API_KEY` (secret) and
 Leave `OPENAI_API_KEY` separate; `LLM_PROVIDER=openai` restores the original path.
 Choose a model/provider supporting required function calls and the strict tool
 schema. OpenRouter errors identify its credentials, credits and rate limits.
+An OpenRouter 404 can mean that routing or privacy settings leave no eligible
+provider, even for a valid model name. The OpenRouter request omits optional
+reasoning and parallel-tool flags; BeamAgent still limits execution to one tool
+call and requires captured intent. No automatic retry relaxes routing settings.
 Keys are removed from supermarket worker environments. Cost still remains unknown
 without a configured BeamAgent price schedule.
 

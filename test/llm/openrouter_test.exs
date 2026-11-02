@@ -11,7 +11,7 @@ defmodule DealAgent.LLM.OpenRouterTest do
       body = Jason.decode!(body)
       assert body["model"] == "openai/gpt-4.1-mini"
       assert body["tool_choice"] == "required"
-      assert body["parallel_tool_calls"] == false
+      refute Map.has_key?(body, "parallel_tool_calls")
       assert body["provider"]["require_parameters"] == true
       refute Map.has_key?(body, "reasoning")
       assert [%{"name" => "capture_intent", "strict" => true}] = body["tools"]
