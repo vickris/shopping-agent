@@ -29,7 +29,10 @@ export async function selectAutomaticLocation(page, store, point, navigate, onPr
     const expectedAddress=await input.inputValue();
     await assertNearbyAddress(page,expectedAddress,point);
     await page.getByRole('button',{name:'Save Address',exact:true}).click();
-    await addressInput.waitFor({state:'hidden',timeout:15000});
+    // Naivas completes the map callback after its Save action. Its live map
+    // commonly takes longer than the generic address-dialog transition, so
+    // allow the store-specific save to settle before checking persistence.
+    await addressInput.waitFor({state:'hidden',timeout:30000});
     await closeNaivasAddressDrawer(page);
     step('verifying_location');
     const selected=await readLocation(page,store);
@@ -59,8 +62,16 @@ export async function selectAutomaticLocation(page, store, point, navigate, onPr
   }
   if (store === 'quickmart') {
     await page.getByRole('button', {name: 'Accept Cookies', exact: true}).click({timeout: 2000}).catch(() => {});
-    const detect = page.getByRole('button', {name: /Use (My|Your) Current Location/i}).filter({visible: true}).first();
-    if (!await detect.count()) await page.locator('.locationButtonJs').first().click();
+    // Quickmart currently renders the usable GPS control inside its location
+    // form without a reliable accessible name. Prefer that visible form
+    // control, while retaining the accessible fallback used by older markup.
+    let detect = page.locator('#frmPopupUserLocation button.btn-detect:visible, #frmModalPopupUserLocation button.btn-detect:visible').first();
+    if (!await detect.count()) {
+      await page.locator('.locationButtonJs:visible').first().click({timeout: 5000}).catch(() => {});
+      detect = page.locator('#frmPopupUserLocation button.btn-detect:visible, #frmModalPopupUserLocation button.btn-detect:visible').first();
+    }
+    if (!await detect.count()) detect = page.getByRole('button', {name: /Use (My|Your) Current Location/i}).first();
+    await detect.waitFor({state:'visible',timeout:10000});
     await detect.click({timeout: 10000});
     // The store's resolver explicitly offers its closest branch; do not choose
     // a branch by page order or keep the old Ruaka search branch.

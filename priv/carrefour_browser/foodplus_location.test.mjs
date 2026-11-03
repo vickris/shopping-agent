@@ -3,10 +3,18 @@ import assert from 'node:assert/strict';
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 const {chromium}=await import('playwright');
 const {selectAutomaticLocation}=await import('./automatic_location.mjs');
+const {sameBranch}=await import('./foodplus_location.mjs');
 const {readLocation}=await import('./delivery_location.mjs');
 const {cartFailure}=await import('./cart_errors.mjs');
 const {prepareStore,verifyStoreCart}=await import('./store_carts.mjs');
 const point={latitude:-1.4271152,longitude:36.9763846,accuracy:100};
+
+test('Foodplus accepts only a meaningful leading storefront abbreviation',()=>{
+  assert.equal(sameBranch('Adlife Plaza','Adlife Plaza Kilimani'),true);
+  assert.equal(sameBranch('The Stop','The Stop @Rhapta Branch'),true);
+  assert.equal(sameBranch('Adlife','Adlife Plaza Kilimani'),false);
+  assert.equal(sameBranch('ABC Place','Adlife Plaza Kilimani'),false);
+});
 
 async function fixture(run,{saved='The Stop @Rhapta Branch',resolver='The Stop @Rhapta Branch',retained=saved}={}) {
   const browser=await chromium.launch({headless:true,channel:'chromium'});

@@ -23,10 +23,27 @@ export async function selectFoodplusLocation(page, point, navigate, step) {
   const selected=data.success && data.availableStores?.filter(store=>store.storeCode!=='admin' && Number(store.isSelected)===1);
   if(!selected || selected.length!==1)throw Error('location_unconfirmed');
   const current=await readLocation(page,'foodplus');
-  if(current.label!==selected[0].StoreName.trim())throw Error('location_not_saved');
+  // Foodplus abbreviates a selected branch in its header: for example, the
+  // resolver's "Adlife Plaza Kilimani" is rendered as "Adlife Plaza". Accept
+  // only a complete, meaningful leading label, never a loose substring, so a
+  // different branch cannot be mistaken for the GPS-selected one.
+  if(!sameBranch(current.label,selected[0].StoreName))throw Error('location_not_saved');
   step('retaining_location');
   await navigate('https://foodplus.co.ke/catalogsearch/result/?q=milk');
   const retained=await readLocation(page,'foodplus');
   if(JSON.stringify(retained)!==JSON.stringify(current))throw Error('location_not_saved');
   return {...retained,confirmation:'geolocation'};
+}
+
+export function sameBranch(current, selected) {
+  const words=value=>String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const displayed=words(current), resolved=words(selected);
+  return displayed.length >= 2 &&
+    displayed.length <= resolved.length &&
+    displayed.every((word,index)=>word===resolved[index]);
 }

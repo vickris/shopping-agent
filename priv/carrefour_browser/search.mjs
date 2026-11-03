@@ -33,7 +33,11 @@ try {
       : { firefoxUserPrefs: process.env.DEAL_AGENT_BROWSER_HTTP1 === "1" ? { "network.http.http2.enabled": false } : {} }),
     timeout: 10000,
   });
-  const context = await browser.newContext();
+  const context = await browser.newContext(store === "quickmart" ? {
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    locale: "en-KE",
+    timezoneId: "Africa/Nairobi"
+  } : {});
   const page = await context.newPage();
   const url = store === "quickmart"
     ? new URL("https://www.quickmart.co.ke/shops/products/1/keyword-" + encodeURIComponent(query.trim()))

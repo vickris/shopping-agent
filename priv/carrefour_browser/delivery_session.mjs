@@ -19,6 +19,17 @@ const setup = await new Promise(resolve=>input.once('line',line=>resolve(JSON.pa
 const roots={carrefour:'https://www.carrefour.ke/mafken/en',quickmart:'https://www.quickmart.co.ke/',naivas:'https://www.naivas.online/',foodplus:'https://foodplus.co.ke/'};
 let browser,page,confirmed,initialIdentity,busy=false,resume,starting=true,cartPlan;
 let engine,contextOptions;
+const browserContext = (store, point) => ({
+  ...(point ? {geolocation:point} : {}),
+  // Quickmart's CDN rejects Playwright's default HeadlessChrome user agent
+  // before it can render the delivery-location controls. This is a standard
+  // desktop context, not a bypass of a challenge or access control.
+  ...(store==='quickmart' ? {
+    userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    locale:'en-KE',
+    timezoneId:'Africa/Nairobi'
+  } : {})
+});
 const disconnected=()=>{emit({type:'closed'});process.exit(0);};
 async function showWindow() {
   if(!headless){await page.bringToFront();return;}
@@ -175,7 +186,7 @@ try {
   browser.on('disconnected',disconnected);
   const point=setup.coordinates;
   if(point && (![point.latitude,point.longitude,point.accuracy].every(Number.isFinite)||Math.abs(point.latitude)>90||Math.abs(point.longitude)>180||point.accuracy<0))throw Error('invalid_setup');
-  contextOptions=point?{geolocation:point}:{};
+  contextOptions=browserContext(setup.store,point);
   const context=await browser.newContext(contextOptions);
   if(point)await context.grantPermissions(['geolocation'],{origin: new URL(roots[setup.store]).origin});
   page=await context.newPage();
