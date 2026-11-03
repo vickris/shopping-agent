@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 const {chromium} = await import('playwright');
-import {selectAutomaticLocation, distanceMeters} from './automatic_location.mjs';
+import {selectAutomaticLocation, distanceMeters, nearbyRadius} from './automatic_location.mjs';
 let browser;
 before(async () => { browser = await chromium.launch({headless: true, channel: 'chromium'}); });
 after(async () => { await browser?.close(); });
@@ -230,4 +230,10 @@ test('location distance separates a nearby street from a remote namesake', () =>
   assert.equal(distanceMeters(point, point), 0);
   assert.ok(distanceMeters(point, {latitude: -1.368, longitude: 36.936}) < 2000);
   assert.ok(distanceMeters(point, {latitude: -1.2, longitude: 36.8}) > 2000);
+});
+
+test('coarse browser locations get a bounded nearby-address tolerance',()=>{
+  assert.equal(nearbyRadius({...point,accuracy:100}),2000);
+  assert.equal(nearbyRadius({...point,accuracy:1800}),3600);
+  assert.equal(nearbyRadius({...point,accuracy:10000}),5000);
 });

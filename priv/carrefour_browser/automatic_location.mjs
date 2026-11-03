@@ -169,7 +169,7 @@ async function selectNearbyAddress(page,point,input,step) {
     // Identically named places can exist in different towns. Compare the
     // suggestions to the supplied coordinates instead of taking the first.
     const nearest = candidates.flat().filter(candidate => Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude)).map(candidate => ({...candidate, distance: distanceMeters(point, candidate)})).sort((a, b) => a.distance - b.distance)[0];
-    if (!nearest || nearest.distance > 2000) continue;
+    if (!nearest || nearest.distance > nearbyRadius(point)) continue;
     step('selecting_address');
     await dismissAddressCookies(page);
     // Autocomplete can replace/reorder its lists while geocoding is in flight.
@@ -219,4 +219,13 @@ export function distanceMeters(a, b) {
   const dlat = radians(b.latitude - a.latitude), dlon = radians(b.longitude - a.longitude);
   const h = Math.sin(dlat / 2) ** 2 + Math.cos(radians(a.latitude)) * Math.cos(radians(b.latitude)) * Math.sin(dlon / 2) ** 2;
   return 6371000 * 2 * Math.asin(Math.sqrt(Math.min(1, h)));
+}
+
+// Desktop browsers can provide a deliberately coarse location. Keep precise
+// locations within the existing 2 km rule, but make a bounded allowance for
+// the browser's own reported uncertainty rather than rejecting every valid
+// nearby estate suggestion.
+export function nearbyRadius(point) {
+  const accuracy=Number(point?.accuracy);
+  return Number.isFinite(accuracy) ? Math.min(5000,Math.max(2000,accuracy*2)) : 2000;
 }
