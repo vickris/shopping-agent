@@ -15,8 +15,11 @@ implementation. The existing local development flow remains available.
    `2c-4g` web service in Frankfurt and a free PostgreSQL database. Check Render's
    displayed current price; this is not a free web deployment. The free database
    expires after 30 days and must be upgraded to keep it beyond the beta.
-4. Enter `OPENAI_API_KEY` directly in Render's secret environment field. Do not
-   paste it into chat, source files or build arguments.
+4. Enter `OPENROUTER_API_KEY` directly in Render's secret environment field.
+   The Blueprint sets `LLM_PROVIDER=openrouter` and uses
+   `openai/gpt-4.1-mini`; change the model only to one that supports the
+   intent-capture tool call. Do not paste API keys into chat, source files or
+   build arguments.
 5. Create the Blueprint. The Docker build compiles the Phoenix release, installs
    the matching Firefox and Chromium binaries and checks that both launch as the
    unprivileged runtime user. The pre-deploy command runs database migrations.

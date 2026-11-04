@@ -18,8 +18,12 @@ services:
           property: connectionString
       - key: SECRET_KEY_BASE
         generateValue: true
-      - key: OPENAI_API_KEY
+      - key: LLM_PROVIDER
+        value: openrouter
+      - key: OPENROUTER_API_KEY
         sync: false
+      - key: OPENROUTER_MODEL
+        value: openai/gpt-4.1-mini
       - key: BETA_PASSWORD
         generateValue: true
       - key: BETA_USERNAME
