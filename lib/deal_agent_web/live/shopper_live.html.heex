@@ -1,40 +1,7 @@
 <div class="deal-workspace">
-  <section class="retail-search" aria-label="Find groceries">
-    <div class="search-category">
-      <.icon name="hero-shopping-bag" class="h-4 w-4" /> Groceries
-    </div>
-    <.form for={@chat_form} phx-submit="send-message" class="chat-form" id="chat-form">
-      <div class="chat-compose flex gap-2">
-        <.input
-          field={@chat_form[:message]}
-          placeholder="Search groceries or add your list, e.g. 2 litres of milk"
-          aria-label="Shopping request"
-          disabled={@agent_status == :thinking}
-          autocomplete="off"
-        />
-
-        <button
-          type="submit"
-          aria-label="Search groceries"
-          disabled={@agent_status == :thinking}
-          class={[
-            "rounded px-4 py-2 text-white",
-            @agent_status == :thinking &&
-              "cursor-not-allowed bg-gray-400",
-            @agent_status != :thinking &&
-              "bg-black"
-          ]}
-        >
-          <.icon name="hero-magnifying-glass" class="h-5 w-5" />
-          <span class="search-button-label">Search</span>
-        </button>
-      </div>
-    </.form>
-    <span class="search-note">One list. Four supermarkets.</span>
-  </section>
   <section class="workspace-intro">
     <p class="eyebrow">SMARTER EVERYDAY SHOPPING</p>
-    <h1 class="text-3xl font-bold">Your groceries. The right price.</h1>
+    <h1 class="text-3xl font-bold">Shopping made easier.</h1>
 
     <p class="mt-2 text-gray-600">
       Compare supermarket prices in one place. Build your basket with confidence.
@@ -47,7 +14,7 @@
 
       <%= if ShoppingList.empty?(@shopping_list) do %>
         <p class="mt-4 text-gray-500">
-          Start with the search above. Add a single item or your whole grocery list.
+          Add a single item or your whole grocery list in chat.
         </p>
       <% else %>
         <ul class="shopping-list-chips">
@@ -286,9 +253,36 @@
         </div>
       </div>
 
-      <a href="#chat-form" class="assistant-search-link">
-        Add items to your list <span aria-hidden="true">↑</span>
-      </a>
+      <.form
+        for={@chat_form}
+        phx-submit="send-message"
+        class="chat-form border-t p-4"
+        id="chat-form"
+      >
+        <div class="chat-compose flex gap-2">
+          <.input
+            field={@chat_form[:message]}
+            placeholder="e.g. 2 litres of milk"
+            aria-label="Shopping request"
+            disabled={@agent_status == :thinking}
+            autocomplete="off"
+          />
+
+          <button
+            type="submit"
+            disabled={@agent_status == :thinking}
+            class={[
+              "rounded px-4 py-2 text-white",
+              @agent_status == :thinking &&
+                "cursor-not-allowed bg-gray-400",
+              @agent_status != :thinking &&
+                "bg-black"
+            ]}
+          >
+            Send
+          </button>
+        </div>
+      </.form>
     </section>
     <div id="comparison" class="comparison-workspace">
       <section :if={ShoppingList.empty?(@shopping_list)} class="comparison-empty">
@@ -301,10 +295,10 @@
         <p class="eyebrow">FOUR STORES. ONE CLEAR VIEW.</p>
         <h2>Compare before you checkout.</h2>
         <p>
-          Search for the groceries you need. Compare products and pack prices, select your favourites, and see your basket total at each supermarket.
+          Add the groceries you need in chat. Compare products and pack prices, select your favourites, and see your basket total at each supermarket.
         </p>
         <div class="empty-steps">
-          <span><b>01</b> Search your groceries</span><span><b>02</b> Pick your products</span><span><b>03</b> Compare totals</span>
+          <span><b>01</b> Tell us your list</span><span><b>02</b> Pick your products</span><span><b>03</b> Compare totals</span>
         </div>
       </section>
 
