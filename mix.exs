@@ -77,9 +77,10 @@ defmodule DealAgent.MixProject do
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind deal_agent", "esbuild deal_agent"],
+      "assets.build": ["extension.build", "tailwind deal_agent", "esbuild deal_agent"],
       "assets.deploy": [
         "compile",
+        "extension.build",
         "tailwind deal_agent --minify",
         "esbuild deal_agent --minify",
         "phx.digest"

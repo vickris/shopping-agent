@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Shopping Agent — Browser Checkout</title><link rel="stylesheet" href="checkout.css"></head><body>
+<header><span aria-hidden="true">🛒</span> Shopping Agent <small>Browser checkout</small></header>
+<main><h1 id="heading">Your basket, in your browser</h1><p>Sign in and pay directly on the supermarket website. The extension never reads your password, cookies or payment details.</p>
+<p id="status" role="status"></p><section id="basket" hidden><p id="branch"></p><ul id="products"></ul>
+<p class="notice">Only the selected products are set to the quantities listed here. Other existing basket items are kept. Prices and delivery may differ in your own store session; the transfer stops if a selected price changes. You review the full order and submit payment yourself. If the transfer stops, some items may already have been added; inspect the basket before continuing.</p>
+<div class="actions"><button id="open">1. Open supermarket &amp; sign in</button><button id="resume">2. Location confirmed — build basket</button><button id="focus">View supermarket tab</button><button id="clear">Clear / stop transfer</button></div>
+<p>Keep the helper supermarket tab open during transfer. Stopping an active transfer closes that helper tab but does not delete its cart. Basket instructions expire after 30 minutes.</p></section>
+<p id="empty">Select products in Shopping Agent, then choose “Checkout in my browser”.</p>
+</main><script type="module" src="checkout.js"></script></body></html>

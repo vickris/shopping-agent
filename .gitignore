@@ -43,3 +43,6 @@ npm-debug.log
 .env
 .env.*
 !.env.example
+
+# Generated desktop extension package
+/priv/static/downloads/

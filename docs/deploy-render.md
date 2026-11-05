@@ -1,10 +1,10 @@
 # Deploy the friends beta on Render
 
 This deployment supports chat, supermarket searches, product selection, totals,
-and private remote checkout for the stores with cart adapters (Carrefour,
-Quickmart and Naivas). Foodplus checkout remains unsupported by its adapter.
-Shoppers control the existing store browser inside the app, rather than receiving
-an empty cart in a separate browser. The local desktop flow remains available.
+and desktop browser-extension checkout for Carrefour, Quickmart and Naivas.
+Foodplus checkout remains unsupported by its adapter. Shoppers build the basket
+in their own Chrome/Edge session, sign in normally on the store website, and
+review and pay there. The local desktop flow remains available.
 
 ## Create the deployment
 
@@ -60,9 +60,11 @@ If creating the resources manually, use these settings:
   `mix phx.gen.secret` (minimum 64 bytes). Put the
   `OPENROUTER_API_KEY` directly in Render's Environment settings.
 
-Keep `LOCAL_BROWSER_ENABLED=false` on Render to disable desktop windows. Set
-`REMOTE_CHECKOUT_ENABLED=true` to enable private in-app checkout. Both settings
-are in the Blueprint; update the environment manually for an existing deployment.
+For the desktop extension flow, set `BROWSER_CHECKOUT_ENABLED=true`,
+`REMOTE_CHECKOUT_ENABLED=false`, and `LOCAL_BROWSER_ENABLED=false`. All three
+settings are in the Blueprint; update them manually for an existing deployment.
+Server browsers still perform product searches, but do not build checkout carts
+in this mode. The selected basket is exported to the shopper's extension.
 The Docker image enables the Phoenix server and installs browser binaries; do not override
 `PLAYWRIGHT_BROWSERS_PATH` or add a single-browser engine override.
 
@@ -93,10 +95,12 @@ Elixir service can be removed once the Docker service has been verified.
 - Check results and totals from each available supermarket. A successful image
   build proves the browser engines launch, but store access from Render's network
   still needs this live check; retailer blocking can differ from a local machine.
-- Try from a phone on a different network. Select a product, choose Shop now,
-  wait for the verified cart, then choose Continue to checkout. Verify the store,
-  branch, quantities and final total in the private view before payment. Do not
-  place a real order just to test deployment.
+- On desktop Chrome/Edge, install the checkout extension using the download link
+  beneath the store total. Return to Shopping Agent, select products and choose
+  Checkout in my browser. Follow the extension review, sign-in, location and cart
+  steps. Review quantities and the final total on the store website. Do not place
+  a real order just to test deployment. The extension is not supported on phones;
+  product comparison remains available there.
 
 ## Beta limits and operations
 
@@ -131,7 +135,52 @@ References: [Blueprint specification](https://render.com/docs/blueprint-spec),
 [pricing](https://render.com/pricing),
 [Playwright browser installation](https://playwright.dev/docs/browsers).
 
-## Private remote checkout
+## Browser checkout extension (preferred)
+
+The Docker build packages `extension/` into
+`/downloads/shopping-agent-extension.zip`. For local packaging, run
+`mix extension.build` (also included in both asset build aliases). Download the
+ZIP, extract it, open `chrome://extensions` or `edge://extensions`, enable
+Developer mode and Load unpacked with the extracted folder. Return to the app after
+installing; the extension connects to an already-open app tab. For a public non-developer install, publish through the browser's
+extension store separately; no store publication has been performed.
+
+The extension first shows the selected products and pack counts. The shopper
+explicitly approves access to the selected supermarket, signs in normally and
+confirms delivery, then chooses Build basket. Only then does the extension use
+store cart controls. Selected prices are checked before adding products, selected
+quantities are read before adjustment, and unrelated existing items are preserved.
+The full cart may therefore cost more than the app's selected subtotal. The user
+reviews all items, delivery fees and final totals before paying. The extension
+never clicks checkout, payment or login controls.
+
+Only basket descriptions are passed from the app. The extension does not read or
+export cookies, passwords, login tokens or payment details. It has no Google,
+payment-domain, cookie API, debugger or broad all-sites permissions. Retailer
+permissions are optional and approved per store. Temporary basket/progress data
+uses `chrome.storage.session` and expires after 30 minutes. Store authentication
+and carts remain in the shopper's own browser account. Stop / clear transfer does
+not empty the store cart. Closing an active helper tab stops further automation.
+
+Google sign-in takes place in a normal browser tab without scripted interaction
+or server-session transfer; identity providers and retailers can still impose
+their own access rules. Changed markup, prices, redirects or branch mismatches
+stop the transfer for user review. A transfer is never blindly retried after an
+uncertain cart update. Live retailer and sign-in checks must be performed on the
+installed browser before demoing; fixture tests do not certify live payments.
+
+App origins are explicitly allowlisted in `extension/manifest.json` and
+`extension/policy.js`. Both include the current Render URL and localhost:4000.
+Update both, rebuild and reload if moving to a custom domain. Never wildcard
+all app domains. See `extension/README.md` for installation and privacy details.
+
+Tests: `node --test --test-concurrency=1 test/extension/*.test.mjs`.
+
+## Private remote checkout (optional, disabled by default)
+
+This older alternative uses `REMOTE_CHECKOUT_ENABLED=true` with
+`BROWSER_CHECKOUT_ENABLED=false`. It can be incompatible with Google sign-in;
+the browser-extension path above is preferred.
 
 The viewer sends bounded clicks, keystrokes, scrolling and viewport images over
 that shopper's existing LiveView connection. There is no public browser endpoint,

@@ -55,3 +55,6 @@ a { color:var(--teal); }
 [data-remote-status] { font-size:12px; padding:10px 0; }.remote-type-label { display:block; font-size:12px; margin:12px 0; }
 [data-remote-input] { display:block; width:100%; border:1px solid #778282; border-radius:5px; margin-top:6px; min-height:42px; }
 @media(max-width:760px) { .remote-checkout { padding:10px; }.remote-checkout-header { flex-wrap:wrap; }.remote-checkout-header > div { flex-basis:100%; }.remote-checkout-header h2 { font-size:18px; }.remote-toolbar button { padding:7px; } }
+
+.browser-checkout-panel { margin-top:12px; padding:12px; border:1px solid #d5d9d9; border-radius:5px; background:white; font-size:12px; line-height:1.6; }
+.browser-checkout-panel a { display:block; margin-top:6px; text-decoration:underline; }.browser-checkout-panel summary { cursor:pointer; margin-top:8px; color:var(--teal); }.browser-checkout-panel details p { margin-top:8px; }

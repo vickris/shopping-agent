@@ -60,6 +60,10 @@ defmodule DealAgentWeb.ShopperLive do
        :remote_checkout_enabled,
        Application.get_env(:deal_agent, :remote_checkout_enabled, false)
      )
+     |> assign(
+       :browser_checkout_enabled,
+       Application.get_env(:deal_agent, :browser_checkout_enabled, false)
+     )
      |> assign(:remote_store, nil)
      |> assign(:shopping_list, ShoppingList.new())
      |> assign(:cart_jobs, %{})
@@ -164,7 +168,8 @@ defmodule DealAgentWeb.ShopperLive do
 
   def handle_event(event, _params, %{assigns: %{local_browser_enabled: false}} = socket)
       when event == "setup-delivery" or
-             (event == "shop-now" and not socket.assigns.remote_checkout_enabled) do
+             (event == "shop-now" and not socket.assigns.remote_checkout_enabled and
+                not socket.assigns.browser_checkout_enabled) do
     online_preview_unavailable(socket)
   end
 
@@ -271,6 +276,36 @@ defmodule DealAgentWeb.ShopperLive do
        :error,
        "Foodplus checkout is unavailable. Its website currently reports maintenance; you can still compare prices and select products."
      )}
+  end
+
+  def handle_event("shop-now", params, %{assigns: %{browser_checkout_enabled: true}} = socket) do
+    with store when not is_nil(store) <- store_for(params),
+         {:ok, plan} <-
+           CartPlan.build(
+             socket.assigns.shopping_list.items,
+             socket.assigns[store.selections_key],
+             store.adapter.name()
+           ) do
+      profile = socket.assigns.delivery_sessions[store.id] || %{}
+
+      delivery = %{
+        label: Map.get(profile, :label) || Map.get(profile, :area),
+        branch_id: Map.get(profile, :branch_id)
+      }
+
+      plan =
+        Map.merge(plan, %{
+          version: 1,
+          request_id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false),
+          created_at: System.system_time(:second),
+          delivery: delivery
+        })
+
+      {:noreply, push_event(socket, "browser-basket", %{plan: plan})}
+    else
+      {:error, reason} -> {:noreply, put_flash(socket, :error, cart_error_message(reason))}
+      _ -> {:noreply, put_flash(socket, :error, "Choose a supported supermarket first.")}
+    end
   end
 
   @impl true

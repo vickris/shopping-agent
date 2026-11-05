@@ -21,6 +21,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {Notyf} from "notyf"
+import {BrowserCheckout} from "./browser_checkout"
 import {RemoteCheckout} from "./remote_checkout"
 import {BrowserLocation} from "./location"
 import topbar from "../vendor/topbar"
@@ -30,6 +31,7 @@ let liveSocket = new LiveSocket("/live", Socket, {
   hooks: {
     BrowserLocation,
     RemoteCheckout,
+    BrowserCheckout,
     ProductImage: {
       mounted() {
         this.onImageError = event => {

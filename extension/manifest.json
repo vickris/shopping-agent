@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Shopping Agent \u2014 Browser Checkout",
+  "version": "0.1.0",
+  "minimum_chrome_version": "120",
+  "description": "Build your selected supermarket basket in your own browser. You sign in, review and pay on the store's website.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "alarms"
+  ],
+  "optional_host_permissions": [
+    "https://www.carrefour.ke/*",
+    "https://carrefour.ke/*",
+    "https://www.quickmart.co.ke/*",
+    "https://quickmart.co.ke/*",
+    "https://www.naivas.online/*",
+    "https://naivas.online/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open Shopping Agent checkout"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://deal-agent-beta.onrender.com/*",
+        "http://localhost:4000/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  },
+  "host_permissions": [
+    "https://deal-agent-beta.onrender.com/*",
+    "http://localhost:4000/*"
+  ]
+}

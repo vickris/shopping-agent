@@ -242,7 +242,18 @@ can still open a window earlier. Close the session when finished; session expiry
 also closes it. Review delivery, minimum-order rules and payment in the store;
 the assistant never submits checkout or payment.
 
-Hosted deployments can instead set `REMOTE_CHECKOUT_ENABLED=true` and keep
+Hosted deployments should use `BROWSER_CHECKOUT_ENABLED=true`,
+`REMOTE_CHECKOUT_ENABLED=false`, and `LOCAL_BROWSER_ENABLED=false` for desktop
+Chrome/Edge checkout. Download and install the unpacked extension linked beneath
+the store total, then reload the app and choose **Checkout in my browser**.
+The extension reviews the basket, asks permission for the selected store, and
+opens a normal supermarket tab. Sign in and confirm delivery there, then return
+to the extension and choose **Location confirmed — build basket**. It checks
+selected prices and quantities without clearing unrelated cart items. Review
+the full store basket and pay yourself. Passwords, cookies and payment details
+stay in the shopper's browser and are not exported to Shopping Agent.
+
+The optional older remote viewer can be enabled with `REMOTE_CHECKOUT_ENABLED=true` and
 `LOCAL_BROWSER_ENABLED=false`. Continue to checkout then opens an interactive
 private view of that same headless store session in the app, including a keyboard
 for phones, scrolling, page dialogs and payment-tab selection. The user reviews
@@ -251,7 +262,7 @@ background searches. The viewer is bound to the owning live connection and ends
 on disconnect, explicit close or expiry. It is not a shareable cart link. A generic
 guest-cart URL does not transfer that browser's cart to another device; phone
 handoff into a separate browser requires a supermarket-supported shared cart or verified account sync.
-See [Render remote checkout setup and limits](docs/deploy-render.md#private-remote-checkout).
+See [Render browser checkout setup](docs/deploy-render.md#browser-checkout-extension-preferred) for installation, privacy, limits and testing.
 
 Additional browser checks:
 `node --test priv/carrefour_browser/automatic_location.test.mjs`.

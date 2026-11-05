@@ -595,27 +595,57 @@
                     phx-value-store={store.id}
                     class="shop-now"
                     disabled={
-                      (!@local_browser_enabled and !@remote_checkout_enabled) or
+                      (!@local_browser_enabled and !@remote_checkout_enabled and
+                         !@browser_checkout_enabled) or
                         store.id == "foodplus" or
                         total.unresolved == length(@shopping_list.items) or
                         (cart_job && cart_job.status != "closed")
                     }
                   >
-                    {if @local_browser_enabled or @remote_checkout_enabled,
-                      do: "Shop now",
-                      else: "Checkout unavailable"}
+                    {cond do
+                      @browser_checkout_enabled -> "Checkout in my browser"
+                      @local_browser_enabled or @remote_checkout_enabled -> "Shop now"
+                      true -> "Checkout unavailable"
+                    end}
                   </button>
                   <p :if={store.id != "foodplus"} class="mt-2 text-xs text-gray-500">
-                    <%= if @remote_checkout_enabled do %>
-                      Prepares your basket, then opens a private checkout view here. You review and pay directly in the store session.
+                    <%= if @browser_checkout_enabled do %>
+                      Builds your selected basket using the desktop extension. Sign in, review and pay on the supermarket website in your own browser.
                     <% else %>
-                      <%= if @local_browser_enabled do %>
-                        Prepares your basket in the background. Open it on this computer to review and pay.
+                      <%= if @remote_checkout_enabled do %>
+                        Prepares your basket, then opens a private checkout view here. You review and pay directly in the store session.
                       <% else %>
-                        Compare prices and select products. Online checkout is coming later.
+                        <%= if @local_browser_enabled do %>
+                          Prepares your basket in the background. Open it on this computer to review and pay.
+                        <% else %>
+                          Compare prices and select products. Online checkout is coming later.
+                        <% end %>
                       <% end %>
                     <% end %>
                   </p>
+                  <div
+                    :if={@browser_checkout_enabled and store.id != "foodplus"}
+                    id={"#{store.id}-browser-checkout"}
+                    phx-hook="BrowserCheckout"
+                    data-store={store.id}
+                    class="browser-checkout-panel"
+                  >
+                    <p data-browser-checkout-status role="status">
+                      Desktop Chrome or Edge extension required.
+                    </p>
+                    <a href={~p"/downloads/shopping-agent-extension.zip"} download>
+                      Download checkout extension
+                    </a>
+                    <details>
+                      <summary>Install for the demo</summary>
+                      <p>
+                        Unzip the download, open chrome://extensions (or edge://extensions), enable Developer mode and choose Load unpacked. Select the extracted folder, then click Checkout in my browser again.
+                      </p>
+                      <p>
+                        The extension asks for access to the selected supermarket. Login and payment stay on that store’s website. Phones are not supported by this extension.
+                      </p>
+                    </details>
+                  </div>
                   <div
                     :if={cart_job}
                     id={"#{store.id}-cart-status"}

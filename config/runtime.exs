@@ -36,6 +36,11 @@ config :deal_agent,
   openrouter_api_key: System.get_env("OPENROUTER_API_KEY"),
   openrouter_model: System.get_env("OPENROUTER_MODEL", "openai/gpt-4.1-mini")
 
+# Keep local desktop checkout as the default, but allow explicit extension testing.
+config :deal_agent,
+       :browser_checkout_enabled,
+       System.get_env("BROWSER_CHECKOUT_ENABLED", "false") == "true"
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

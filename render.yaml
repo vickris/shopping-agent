@@ -25,8 +25,10 @@ services:
         sync: false
       - key: OPENROUTER_MODEL
         value: openai/gpt-4.1-mini
-      - key: REMOTE_CHECKOUT_ENABLED
+      - key: BROWSER_CHECKOUT_ENABLED
         value: "true"
+      - key: REMOTE_CHECKOUT_ENABLED
+        value: "false"
       - key: LOCAL_BROWSER_ENABLED
         value: "false"
       - key: MAX_BROWSER_SESSIONS
