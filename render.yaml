@@ -42,8 +42,9 @@ services:
 databases:
   - name: deal-agent-beta-db
     region: frankfurt
-    # Suitable only for the beta: Render free databases expire after 30 days.
-    plan: free
+    # Smallest paid database; storage is billed separately.
+    plan: 0.1c-256mb
+    diskSizeGB: 1
     databaseName: deal_agent
     user: deal_agent
     ipAllowList: []

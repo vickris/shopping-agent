@@ -12,9 +12,11 @@ implementation. The existing local development flow remains available.
    push. In Render choose **New → Blueprint** and connect that repository, granting
    access only to the repository needed. Select the branch containing `render.yaml`.
 3. Review the resources before creating them. The Blueprint requests one paid
-   `2c-4g` web service in Frankfurt and a free PostgreSQL database. Check Render's
-   displayed current price; this is not a free web deployment. The free database
-   expires after 30 days and must be upgraded to keep it beyond the beta.
+   `2c-4g` web service (2 CPU / 4 GB RAM) in Frankfurt and a paid
+   `0.1c-256mb` PostgreSQL database with 1 GB of storage. Check Render's
+   displayed price for both resources and database storage before creating them.
+   A Hobby workspace can use paid compute; a paid workspace subscription is not
+   required for this beta.
 4. Enter `OPENROUTER_API_KEY` directly in Render's secret environment field.
    The Blueprint sets `LLM_PROVIDER=openrouter` and uses
    `openai/gpt-4.1-mini`; change the model only to one that supports the
@@ -29,6 +31,41 @@ implementation. The existing local development flow remains available.
 
 Render supplies the public hostname automatically. `/health` is public and checks
 database connectivity; the shopping interface requires the beta password.
+
+## Exact dashboard settings
+
+Use **New → Blueprint** with `vickris/shopping-agent`, branch `main`, and
+Blueprint path `render.yaml`. This is the preferred path because it wires the
+internal database URL, generated secrets and migration command automatically.
+Push the local commits first so Render builds the current UI and Foodplus fix.
+If a previous service used the native Elixir runtime, create this Docker service
+alongside it and verify it before removing the old service.
+
+If creating the resources manually, use these settings:
+
+- PostgreSQL: `deal-agent-beta-db`, Frankfurt, `0.1c-256mb` compute, 1 GB storage.
+  Database name `deal_agent`, user `deal_agent`. Keep external access disabled.
+- Web service: `deal-agent-beta`, repository `vickris/shopping-agent`, branch
+  `main`, runtime **Docker**, region **Frankfurt**, one `2c-4g` instance.
+- Root directory: leave blank. Dockerfile path: `./Dockerfile`. Docker build
+  context: repository root (`.`).
+- Docker Command: leave blank to use the image's `/app/bin/server` command.
+  Do not enter native Elixir build or start commands.
+- Pre-deploy command: `/app/bin/migrate`. Health check path: `/health`.
+  Automatic deploys: off. No persistent disk is needed on the web service.
+- Environment: use all values in `render.yaml`. For manual creation, supply the
+  database's **internal** URL as `DATABASE_URL`, generate `SECRET_KEY_BASE` with
+  `mix phx.gen.secret`, and choose a strong `BETA_PASSWORD`. Put the
+  `OPENROUTER_API_KEY` directly in Render's Environment settings.
+
+`LOCAL_BROWSER_ENABLED=false` disables manual desktop windows and checkout; it
+**does not disable headless product searches**. The Docker image enables the
+Phoenix server and installs browser binaries; do not override
+`PLAYWRIGHT_BROWSERS_PATH` or add a single-browser engine override.
+
+Render sets `RENDER_EXTERNAL_HOSTNAME`, which the app already uses. Leave
+`PHX_HOST` unset for an `onrender.com` domain. Browser geolocation must be used
+through the HTTPS URL. Set `PHX_HOST` to your hostname if adding a custom domain.
 
 ## Verify before inviting friends
 
@@ -75,5 +112,6 @@ tested locally. A Linux Docker build must still complete on Render: this workspa
 does not have a Docker engine installed.
 
 References: [Blueprint specification](https://render.com/docs/blueprint-spec),
-[free database limits](https://render.com/docs/free),
+[compute plans](https://render.com/docs/compute-plans),
+[pricing](https://render.com/pricing),
 [Playwright browser installation](https://playwright.dev/docs/browsers).
