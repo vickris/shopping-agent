@@ -38,6 +38,42 @@ defmodule DealAgent.Supermarkets.FoodplusTest do
     refute result.metadata.checkout_supported
   end
 
+  test "branch results accept Magento product routes alongside SEO links" do
+    for path <- [
+          "/catalog/product/view/id/42/s/fresha-500ml-whole-milk/category/2/",
+          "/catalog/product/view/id/42/s/fresha-500ml-whole-milk/",
+          "/catalog/product/view/id/42/"
+        ] do
+      controller_card =
+        card("FRESHA 500ML WHOLE MILK")
+        |> String.replace("https://foodplus.co.ke/milk.html", "https://foodplus.co.ke" <> path)
+
+      seo_card = String.replace(card("Milk 1L"), "42", "43")
+
+      assert {:ok, [product, seo_product]} =
+               ResponseParser.parse(page(controller_card <> seo_card))
+
+      assert product.id == "42"
+      assert product.url == "https://foodplus.co.ke" <> path
+      assert Decimal.equal?(product.price, "70")
+      assert product.in_stock
+      assert seo_product.id == "43"
+    end
+  end
+
+  test "Magento links must use the Foodplus domain and match the card product" do
+    for url <- [
+          "https://example.com/catalog/product/view/id/42/",
+          "https://foodplus.co.ke/catalog/product/view/id/99/s/milk/category/2/",
+          "https://foodplus.co.ke/catalog/product/view/id/42/other/",
+          "https://foodplus.co.ke/checkout/",
+          "http://foodplus.co.ke/catalog/product/view/id/42/"
+        ] do
+      html = page(String.replace(card("Milk 1L"), "https://foodplus.co.ke/milk.html", url))
+      assert {:error, {:invalid_product_card, "42"}} = ResponseParser.parse(html)
+    end
+  end
+
   test "unavailable and unknown or ambiguous sizes remain explicit" do
     for name <- ["Milk", "Milk 2 x 500ML", "Milk 1L + 500ML", "Milk 2-5L"] do
       assert {:ok, [%{quantity: nil, unit: nil, in_stock: false}]} =

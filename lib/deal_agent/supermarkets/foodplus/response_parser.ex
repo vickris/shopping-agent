@@ -54,7 +54,7 @@ defmodule DealAgent.Supermarkets.Foodplus.ResponseParser do
            URI.parse(href || ""),
          true <-
            host in ["foodplus.co.ke", "www.foodplus.co.ke"] and
-             String.ends_with?(path || "", ".html"),
+             product_path?(path, id),
          true <- is_binary(value) and Regex.match?(~r/^\d+(?:\.\d{1,2})?$/, value),
          {price, ""} <- Decimal.parse(value),
          true <- Decimal.compare(price, 0) == :gt do
@@ -81,6 +81,21 @@ defmodule DealAgent.Supermarkets.Foodplus.ResponseParser do
       _ -> {:error, {:invalid_product_card, id}}
     end
   end
+
+  # Magento also emits its controller URL when a branch has no SEO URL rewrite.
+  # Require the linked product to match the card rather than accepting any route.
+  defp product_path?(path, id) when is_binary(path) do
+    String.ends_with?(path, ".html") or
+      case Regex.run(
+             ~r{\A/catalog/product/view/id/(\d+)(?:/s/[a-zA-Z0-9_-]+)?(?:/category/\d+)?/?\z},
+             path
+           ) do
+        [_, ^id] -> true
+        _ -> false
+      end
+  end
+
+  defp product_path?(_, _), do: false
 
   defp title_size(name) do
     # Reject ambiguous ranges, bundles and multiple amounts rather than guessing.
