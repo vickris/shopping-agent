@@ -1,9 +1,10 @@
 # Deploy the friends beta on Render
 
-This deployment supports chat, supermarket searches, product selection and totals.
-Checkout and manual store-window controls are disabled: a browser running on the
-server cannot hand its cart to a friend's phone. Remote checkout needs a separate
-implementation. The existing local development flow remains available.
+This deployment supports chat, supermarket searches, product selection, totals,
+and private remote checkout for the stores with cart adapters (Carrefour,
+Quickmart and Naivas). Foodplus checkout remains unsupported by its adapter.
+Shoppers control the existing store browser inside the app, rather than receiving
+an empty cart in a separate browser. The local desktop flow remains available.
 
 ## Create the deployment
 
@@ -59,9 +60,10 @@ If creating the resources manually, use these settings:
   `mix phx.gen.secret` (minimum 64 bytes). Put the
   `OPENROUTER_API_KEY` directly in Render's Environment settings.
 
-`LOCAL_BROWSER_ENABLED=false` disables manual desktop windows and checkout; it
-**does not disable headless product searches**. The Docker image enables the
-Phoenix server and installs browser binaries; do not override
+Keep `LOCAL_BROWSER_ENABLED=false` on Render to disable desktop windows. Set
+`REMOTE_CHECKOUT_ENABLED=true` to enable private in-app checkout. Both settings
+are in the Blueprint; update the environment manually for an existing deployment.
+The Docker image enables the Phoenix server and installs browser binaries; do not override
 `PLAYWRIGHT_BROWSERS_PATH` or add a single-browser engine override.
 
 Render sets `RENDER_EXTERNAL_HOSTNAME`, which the app already uses. Leave
@@ -91,7 +93,10 @@ Elixir service can be removed once the Docker service has been verified.
 - Check results and totals from each available supermarket. A successful image
   build proves the browser engines launch, but store access from Render's network
   still needs this live check; retailer blocking can differ from a local machine.
-- Try from a phone on a different network. Checkout should say it is unavailable.
+- Try from a phone on a different network. Select a product, choose Shop now,
+  wait for the verified cart, then choose Continue to checkout. Verify the store,
+  branch, quantities and final total in the private view before payment. Do not
+  place a real order just to test deployment.
 
 ## Beta limits and operations
 
@@ -125,3 +130,36 @@ References: [Blueprint specification](https://render.com/docs/blueprint-spec),
 [compute plans](https://render.com/docs/compute-plans),
 [pricing](https://render.com/pricing),
 [Playwright browser installation](https://playwright.dev/docs/browsers).
+
+## Private remote checkout
+
+The viewer sends bounded clicks, keystrokes, scrolling and viewport images over
+that shopper's existing LiveView connection. There is no public browser endpoint,
+shareable cart URL or debugging port. Sessions remain owned by the LiveView PID;
+other connections cannot request frames or send input even if they know a session
+ID. The store browser closes on owner disconnect, explicit End private session,
+request timeout or its existing 30-minute expiry. Back to comparison only hides
+the viewer and preserves the reserved cart. Refreshing the app loses the session.
+
+Browser state, frames and keyboard input are not written to recordings or the
+database. Remote input and frame parameter keys are filtered from application
+logs. Do not enable protocol tracing, Playwright debugging or session-recording
+software for production checkout. Input is sent once; an uncertain input is not
+replayed automatically. Check the store's order status before repeating payment.
+
+The original cart session stays headless, so no VNC server, extra desktop process,
+or OS packages beyond the existing Docker image are needed. HTTP and websocket
+requests in remote-enabled contexts are restricted to HTTPS/WSS public hosts;
+private, loopback and cloud metadata addresses are blocked by the browser routing
+policy. The viewport refreshes at about one frame per second while visible and
+active, and pauses after five minutes without input. This is an interactive image
+viewer, not a full desktop: passkeys, native file dialogs, downloads and bank-app
+handoffs are not supported. OTP text input, page dialogs, ordinary forms and
+payment tabs have controls. Bank/provider restrictions can still prevent checkout
+from a cloud browser; no live purchase or payment-provider certification is implied.
+
+Remote browsing sends image data through Render, so measure outbound bandwidth
+and browser memory during the demo. Existing browser caps still apply. Keep a
+single web instance; do not scale horizontally without session routing.
+
+Browser regressions: `node --test priv/carrefour_browser/remote_checkout.test.mjs`.

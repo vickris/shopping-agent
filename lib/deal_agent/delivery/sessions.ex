@@ -21,6 +21,13 @@ defmodule DealAgent.Delivery.Sessions do
   def cart(owner, id, store, plan),
     do: GenServer.call(__MODULE__, {:cart, owner, id, store, plan})
 
+  def remote(owner, id, input) do
+    GenServer.call(__MODULE__, {:remote, owner, id, input}, 10_000)
+  catch
+    # Do not let an OTP exit print the request (which may contain typed secrets).
+    :exit, _ -> {:error, :remote_unavailable}
+  end
+
   @impl true
   def init(state), do: {:ok, state}
 
@@ -46,7 +53,12 @@ defmodule DealAgent.Delivery.Sessions do
 
             Port.command(
               port,
-              Jason.encode!(%{store: store, area: area, coordinates: point}) <> "\n"
+              Jason.encode!(%{
+                store: store,
+                area: area,
+                coordinates: point,
+                remote_checkout: Application.get_env(:deal_agent, :remote_checkout_enabled, false)
+              }) <> "\n"
             )
 
             session = %{
@@ -57,6 +69,7 @@ defmodule DealAgent.Delivery.Sessions do
               confirmed: false,
               automatic: not is_nil(point),
               busy: nil,
+              remote_pending: nil,
               timer: Process.send_after(self(), {:expiry, id}, 1_800_000)
             }
 
@@ -161,11 +174,63 @@ defmodule DealAgent.Delivery.Sessions do
     end
   end
 
+  def handle_call({:remote, owner, id, input}, {caller, _} = from, sessions) do
+    case sessions[id] do
+      %{owner: ^owner, remote_pending: nil, busy: busy} = session
+      when caller == owner and (busy == :handoff or busy == {:cart, nil}) ->
+        if Application.get_env(:deal_agent, :remote_checkout_enabled, false) and
+             DealAgent.Checkout.RemoteInput.valid?(input) do
+          request_id = Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
+
+          sent =
+            try do
+              Port.command(
+                session.port,
+                Jason.encode!(%{action: "remote", id: request_id, input: input}) <> "\n"
+              )
+            rescue
+              ArgumentError -> false
+            end
+
+          if sent do
+            timer = Process.send_after(self(), {:remote_timeout, id, request_id}, 8_000)
+
+            {:noreply,
+             Map.put(sessions, id, %{session | remote_pending: {request_id, from, timer}})}
+          else
+            {:reply, {:error, :remote_unavailable}, close_session(sessions, id)}
+          end
+        else
+          {:reply, {:error, :remote_unavailable}, sessions}
+        end
+
+      _ ->
+        {:reply, {:error, :remote_unavailable}, sessions}
+    end
+  end
+
   @impl true
   def handle_info({port, {:data, {:eol, line}}}, sessions) do
     with {id, session} <- Enum.find(sessions, fn {_, s} -> s.port == port end),
          {:ok, event} <- Jason.decode(line) do
       case event do
+        %{"type" => "remote_reply", "id" => request_id} ->
+          case session.remote_pending do
+            {^request_id, from, timer} ->
+              Process.cancel_timer(timer)
+
+              result =
+                if is_map(event["frame"]),
+                  do: {:ok, event["frame"]},
+                  else: {:error, :remote_unavailable}
+
+              GenServer.reply(from, result)
+              {:noreply, Map.put(sessions, id, %{session | remote_pending: nil})}
+
+            _ ->
+              {:noreply, sessions}
+          end
+
         %{"type" => "reply", "id" => request_id} ->
           case session.busy do
             {:search, ^request_id, from, timer, monitor} ->
@@ -257,6 +322,18 @@ defmodule DealAgent.Delivery.Sessions do
     end
   end
 
+  def handle_info({:remote_timeout, id, request_id}, sessions) do
+    case sessions[id] do
+      %{remote_pending: {^request_id, from, _}} = session ->
+        GenServer.reply(from, {:error, :remote_unavailable})
+        # An input might still be executing: close instead of replaying it.
+        {:noreply, close_session(Map.put(sessions, id, %{session | remote_pending: nil}), id)}
+
+      _ ->
+        {:noreply, sessions}
+    end
+  end
+
   def handle_info({:search_timeout, id, request_id}, sessions) do
     case sessions[id] do
       %{busy: {:search, ^request_id, _, _, _}} -> {:noreply, close_session(sessions, id)}
@@ -318,6 +395,12 @@ defmodule DealAgent.Delivery.Sessions do
         sessions
 
       {s, sessions} ->
+        if s.remote_pending do
+          {_, from, timer} = s.remote_pending
+          Process.cancel_timer(timer)
+          GenServer.reply(from, {:error, :remote_unavailable})
+        end
+
         if Port.info(s.port), do: Port.close(s.port)
         Process.cancel_timer(s.timer)
         Process.demonitor(s.ref, [:flush])

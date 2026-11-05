@@ -7,6 +7,7 @@ input.on('line',line=>{
  if(!setup){setup=m;if(m.coordinates){if(m.area==='Automatic retry'){emit({type:'setup',status:'unavailable',message:'Store location could not be confirmed automatically.'});return;}emit({type:'confirmed',location:{area:m.area,label:'Nearby service area',confirmation:'geolocation',...(m.store==='quickmart'?{branch_id:'73',branch:'Nearby Quickmart'}:{})}});return;}emit({type:'setup',status:'awaiting_input',message:'Select the store delivery location, then confirm.'});return;}
  if(m.action==='locate')setTimeout(()=>emit({type:'confirmed',location:{area:setup.area,label:'Nearby service area',confirmation:'geolocation'}}),100);
  if(m.action==='open'){emit({type:'window',status:'opening'});setTimeout(()=>emit(setup.area==='Window failure'?{type:'window',status:'failed',message:'The original basket is retained.'}:{type:'window',status:'opened'}),100);}
+ if(m.action==='remote' && setup.area!=='Remote timeout')emit({type:'remote_reply',id:m.id,frame:{image:'fixture',width:1024,height:768,tabs:[{index:0,host:'store.test'}],active:0,dialog:null}});
  if(m.action==='close')process.exit(0);
  if(m.action==='confirm' && setup.area==='Retry' && confirmations++===0){setTimeout(()=>emit({type:'confirmation_failed',message:'Save the store delivery address, then try again.'}),100);return;}
  if(m.action==='confirm')emit({type:'confirmed',location:{area:setup.area,label:setup.area+', Kenya',...(setup.store==='naivas'?{confirmation:'user_override'}:{}),...(setup.store==='quickmart'?{branch_id:'7701'}:{})}});

@@ -4,7 +4,7 @@ defmodule DealAgent.Delivery.Coordinates do
   # Also apply on mount so a development hot reload cannot expose coordinates
   # before the changed application configuration has been reloaded.
   def protect_logs do
-    keys = ~w(coordinates latitude longitude accuracy)
+    keys = ~w(coordinates latitude longitude accuracy remote_input remote_frame)
 
     filters =
       case Application.get_env(:phoenix, :filter_parameters, ["password"]) do

@@ -56,6 +56,11 @@ defmodule DealAgentWeb.ShopperLive do
        :local_browser_enabled,
        Application.get_env(:deal_agent, :local_browser_enabled, true)
      )
+     |> assign(
+       :remote_checkout_enabled,
+       Application.get_env(:deal_agent, :remote_checkout_enabled, false)
+     )
+     |> assign(:remote_store, nil)
      |> assign(:shopping_list, ShoppingList.new())
      |> assign(:cart_jobs, %{})
      |> assign(:candidate_filters, %{})
@@ -158,7 +163,8 @@ defmodule DealAgentWeb.ShopperLive do
   end
 
   def handle_event(event, _params, %{assigns: %{local_browser_enabled: false}} = socket)
-      when event in ["shop-now", "setup-delivery"] do
+      when event == "setup-delivery" or
+             (event == "shop-now" and not socket.assigns.remote_checkout_enabled) do
     online_preview_unavailable(socket)
   end
 
@@ -167,7 +173,9 @@ defmodule DealAgentWeb.ShopperLive do
         %{"action" => action},
         %{assigns: %{local_browser_enabled: false}} = socket
       )
-      when event in ["delivery-window", "cart-window"] and action in ["open", "confirm", "resume"] do
+      when action in ["open", "confirm", "resume"] and
+             (event == "delivery-window" or
+                (event == "cart-window" and not socket.assigns.remote_checkout_enabled)) do
     online_preview_unavailable(socket)
   end
 
@@ -317,7 +325,23 @@ defmodule DealAgentWeb.ShopperLive do
     store_id = Map.get(params, "store", "carrefour")
 
     case socket.assigns.cart_jobs[store_id] do
+      %{id: id} when action == "open" and socket.assigns.remote_checkout_enabled ->
+        case DeliverySessions.remote(self(), id, %{"type" => "frame"}) do
+          {:ok, _frame} ->
+            {:noreply, assign(socket, :remote_store, store_id)}
+
+          _ ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Private checkout is unavailable. The store session may have expired."
+             )}
+        end
+
       %{id: id} ->
+        socket = assign(socket, :remote_store, nil)
+
         case cart_command(socket, store_id, id, action) do
           :ok ->
             socket =
@@ -342,6 +366,35 @@ defmodule DealAgentWeb.ShopperLive do
 
       _ ->
         {:noreply, socket}
+    end
+  end
+
+  def handle_event("remote-close", _, socket),
+    do: {:noreply, assign(socket, :remote_store, nil)}
+
+  def handle_event("remote-control", %{"remote_input" => input}, socket) do
+    store_id = socket.assigns.remote_store
+    job = socket.assigns.cart_jobs[store_id]
+    profile = socket.assigns.delivery_sessions[store_id]
+
+    result =
+      if socket.assigns.remote_checkout_enabled and job && profile && job.id == profile.id and
+           job.status in ["ready", "needs_attention", "awaiting_input"] do
+        DeliverySessions.remote(self(), job.id, input)
+      else
+        {:error, :remote_unavailable}
+      end
+
+    case result do
+      {:ok, frame} ->
+        {:reply, %{remote_frame: frame}, socket}
+
+      _ ->
+        {:reply,
+         %{
+           error:
+             "Checkout could not refresh. Close the view and retry; do not repeat payment if already submitted."
+         }, socket}
     end
   end
 
@@ -982,6 +1035,12 @@ defmodule DealAgentWeb.ShopperLive do
             socket
           )
         else
+          socket =
+            if socket.assigns.remote_store == store_id and
+                 status not in ["ready", "needs_attention", "awaiting_input"],
+               do: assign(socket, :remote_store, nil),
+               else: socket
+
           updated = %{job | status: status, message: event["message"]}
 
           socket =

@@ -1,5 +1,7 @@
 // One temporary guest session per shopper/store. State never leaves this process.
 import readline from 'node:readline';
+import {remoteCheckout} from './remote_checkout.mjs';
+import {restrictNetwork} from './public_network.mjs';
 import {fileURLToPath} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {openBrowserSession} from './browser_handoff.mjs';
@@ -19,8 +21,11 @@ const setup = await new Promise(resolve=>input.once('line',line=>resolve(JSON.pa
 const roots={carrefour:'https://www.carrefour.ke/mafken/en',quickmart:'https://www.quickmart.co.ke/',naivas:'https://www.naivas.online/',foodplus:'https://foodplus.co.ke/'};
 let browser,page,confirmed,initialIdentity,busy=false,resume,starting=true,cartPlan;
 let engine,contextOptions;
+const remote = remoteCheckout(()=>page);
+let remoteBusy=false;
 const browserContext = (store, point) => ({
   ...(point ? {geolocation:point} : {}),
+  ...(setup.remote_checkout ? {serviceWorkers: 'block'} : {}),
   // Quickmart's CDN rejects Playwright's default HeadlessChrome user agent
   // before it can render the delivery-location controls. This is a standard
   // desktop context, not a bypass of a challenge or access control.
@@ -97,8 +102,8 @@ async function locateAutomatically(reload=false) {
 }
 
 async function pause(message) {
-  if(setup.coordinates)throw Error('location_unconfirmed');
-  await showWindow();
+  if(setup.coordinates && !setup.remote_checkout)throw Error('location_unconfirmed');
+  if(!setup.remote_checkout)await showWindow();
   const continued=new Promise(resolve=>{resume=resolve;});
   emit({type:'cart',status:'awaiting_input',message,verified:false});
   await continued;
@@ -107,6 +112,16 @@ async function pause(message) {
 input.on('line',async line=>{
   let message;
   try {message=JSON.parse(line);}catch{return;}
+  if(message.action==='remote') {
+    if(!setup.remote_checkout || (!cartPlan && !resume) || remoteBusy || (busy && !resume)) {
+      emit({type:'remote_reply',id:message.id,error:'remote_unavailable'});return;
+    }
+    remoteBusy=true;
+    try {emit({type:'remote_reply',id:message.id,frame:await remote(message.input)});}
+    catch {emit({type:'remote_reply',id:message.id,error:'remote_unavailable'});}
+    finally {remoteBusy=false;}
+    return;
+  }
   if(message.action==='close'){await browser?.close();process.exit(0);}
   if(message.action==='open') {
     if(starting || (busy && !resume)) {
@@ -188,6 +203,7 @@ try {
   if(point && (![point.latitude,point.longitude,point.accuracy].every(Number.isFinite)||Math.abs(point.latitude)>90||Math.abs(point.longitude)>180||point.accuracy<0))throw Error('invalid_setup');
   contextOptions=browserContext(setup.store,point);
   const context=await browser.newContext(contextOptions);
+  if(setup.remote_checkout)await restrictNetwork(context);
   if(point)await context.grantPermissions(['geolocation'],{origin: new URL(roots[setup.store]).origin});
   page=await context.newPage();
   if(point)emit({type:'setup',status:'opening',stage:'loading_store',message:locationProgress('loading_store')});

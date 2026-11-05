@@ -21,6 +21,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {Notyf} from "notyf"
+import {RemoteCheckout} from "./remote_checkout"
 import {BrowserLocation} from "./location"
 import topbar from "../vendor/topbar"
 
@@ -28,6 +29,7 @@ let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("
 let liveSocket = new LiveSocket("/live", Socket, {
   hooks: {
     BrowserLocation,
+    RemoteCheckout,
     ProductImage: {
       mounted() {
         this.onImageError = event => {

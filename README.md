@@ -242,9 +242,16 @@ can still open a window earlier. Close the session when finished; session expiry
 also closes it. Review delivery, minimum-order rules and payment in the store;
 the assistant never submits checkout or payment.
 
-This is a local desktop flow, not a shareable cart link. A generic
+Hosted deployments can instead set `REMOTE_CHECKOUT_ENABLED=true` and keep
+`LOCAL_BROWSER_ENABLED=false`. Continue to checkout then opens an interactive
+private view of that same headless store session in the app, including a keyboard
+for phones, scrolling, page dialogs and payment-tab selection. The user reviews
+and pays; the assistant never submits an order. Checkout stays reserved against
+background searches. The viewer is bound to the owning live connection and ends
+on disconnect, explicit close or expiry. It is not a shareable cart link. A generic
 guest-cart URL does not transfer that browser's cart to another device; phone
-handoff requires a supermarket-supported shared cart or verified account sync.
+handoff into a separate browser requires a supermarket-supported shared cart or verified account sync.
+See [Render remote checkout setup and limits](docs/deploy-render.md#private-remote-checkout).
 
 Additional browser checks:
 `node --test priv/carrefour_browser/automatic_location.test.mjs`.

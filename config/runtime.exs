@@ -71,6 +71,7 @@ if config_env() == :prod do
   host = System.get_env("PHX_HOST") || System.get_env("RENDER_EXTERNAL_HOSTNAME") || "example.com"
 
   config :deal_agent,
+    remote_checkout_enabled: System.get_env("REMOTE_CHECKOUT_ENABLED", "false") == "true",
     local_browser_enabled: System.get_env("LOCAL_BROWSER_ENABLED", "false") == "true",
     max_browser_sessions: String.to_integer(System.get_env("MAX_BROWSER_SESSIONS", "8"))
 

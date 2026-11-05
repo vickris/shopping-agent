@@ -73,7 +73,9 @@ config :phoenix, :filter_parameters, [
   "coordinates",
   "latitude",
   "longitude",
-  "accuracy"
+  "accuracy",
+  "remote_input",
+  "remote_frame"
 ]
 
 # Import environment specific config. This must remain at the bottom

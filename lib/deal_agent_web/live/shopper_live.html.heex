@@ -595,18 +595,25 @@
                     phx-value-store={store.id}
                     class="shop-now"
                     disabled={
-                      !@local_browser_enabled or store.id == "foodplus" or
+                      (!@local_browser_enabled and !@remote_checkout_enabled) or
+                        store.id == "foodplus" or
                         total.unresolved == length(@shopping_list.items) or
                         (cart_job && cart_job.status != "closed")
                     }
                   >
-                    {if @local_browser_enabled, do: "Shop now", else: "Checkout unavailable"}
+                    {if @local_browser_enabled or @remote_checkout_enabled,
+                      do: "Shop now",
+                      else: "Checkout unavailable"}
                   </button>
                   <p :if={store.id != "foodplus"} class="mt-2 text-xs text-gray-500">
-                    <%= if @local_browser_enabled do %>
-                      Prepares your basket in the background. Open it on this computer to review and pay.
+                    <%= if @remote_checkout_enabled do %>
+                      Prepares your basket, then opens a private checkout view here. You review and pay directly in the store session.
                     <% else %>
-                      Compare prices and select products. Online checkout is coming later.
+                      <%= if @local_browser_enabled do %>
+                        Prepares your basket in the background. Open it on this computer to review and pay.
+                      <% else %>
+                        Compare prices and select products. Online checkout is coming later.
+                      <% end %>
                     <% end %>
                   </p>
                   <div
@@ -671,3 +678,90 @@
     </div>
   </div>
 </div>
+
+<section
+  :if={@remote_store}
+  id="private-checkout"
+  class="remote-checkout"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="remote-checkout-heading"
+>
+  <div class="remote-checkout-header">
+    <div>
+      <h2 id="remote-checkout-heading">
+        Private {Enum.find(@stores, &(&1.id == @remote_store)).label} checkout
+      </h2>
+      <p>
+        This is your store browser on our server. Review the address, final total and payment yourself. The session expires after 30 minutes or if you leave this page.
+      </p>
+    </div>
+    <button
+      :if={@cart_jobs[@remote_store].status == "awaiting_input"}
+      type="button"
+      phx-click="cart-window"
+      phx-value-action="resume"
+      phx-value-store={@remote_store}
+    >
+      Continue preparation after completing the store prompt
+    </button>
+    <button type="button" phx-click="remote-close">Back to comparison</button>
+    <button
+      type="button"
+      phx-click="cart-window"
+      phx-value-action="close"
+      phx-value-store={@remote_store}
+    >
+      End private session
+    </button>
+  </div>
+  <div
+    id={"remote-checkout-#{@remote_store}"}
+    phx-hook="RemoteCheckout"
+    phx-update="ignore"
+    class="remote-browser"
+  >
+    <div class="remote-toolbar">
+      <label>
+        Store / payment tab <select data-remote-tabs aria-label="Browser tab"></select>
+      </label>
+      <button type="button" data-remote-key="Shift+Tab">Previous field</button>
+      <button type="button" data-remote-key="Tab">Next field</button>
+      <button type="button" data-remote-key="Enter">Enter</button>
+      <button type="button" data-remote-key="ArrowUp">Option up</button>
+      <button type="button" data-remote-key="ArrowDown">Option down</button>
+      <button type="button" data-remote-scroll="-600">Scroll up</button>
+      <button type="button" data-remote-scroll="600">Scroll down</button>
+    </div>
+    <p data-remote-status role="status">Connecting to your private store session…</p>
+    <div data-remote-dialog hidden>
+      <p data-remote-dialog-message></p>
+      <input
+        type="password"
+        data-remote-prompt
+        hidden
+        autocomplete="off"
+        aria-label="Private store prompt response"
+      /> Store dialog: <button type="button" data-remote-dialog="accept">OK</button>
+      <button type="button" data-remote-dialog="dismiss">Cancel</button>
+    </div>
+    <div class="remote-screen-wrap">
+      <img data-remote-screen alt="Interactive private supermarket checkout" draggable="false" />
+    </div>
+    <label class="remote-type-label">
+      Type in the selected store field (also works on phones)
+      <input
+        type="password"
+        data-remote-input
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        aria-label="Private checkout keyboard"
+      />
+    </label>
+    <p class="remote-help">
+      Tap a field in the store view, then type below. Use Next field to reach dropdowns or payment fields. Bank-app approvals, passkeys, file uploads and downloads may require a separate supported checkout flow. Do not refresh this page during payment.
+    </p>
+  </div>
+</section>
