@@ -1,11 +1,25 @@
 <header class="tool-header">
-  <a href="/" class="tool-brand">
-    <span class="brand-icon"><.icon name="hero-shopping-bag" class="h-5 w-5" /></span>
-    deal<span class="brand-light">agent</span>
+  <a href="/" class="tool-brand" aria-label="Deal Agent home">
+    <span class="brand-icon"><.icon name="hero-shopping-bag" class="h-6 w-6" /></span>
+    deal<span class="brand-light">agent</span><span class="brand-domain">.ke</span>
   </a>
-  <div class="header-caption">Shop smarter. Choose confidently.</div>
-  <span class="header-badge"><span></span> Kenya · KES</span>
+  <div class="header-caption">Grocery shopping, better informed.</div>
+  <div class="header-actions">
+    <a href="#delivery-heading" class="header-location">
+      <.icon name="hero-map-pin" class="h-5 w-5" />
+      <span><small>Shopping in Kenya</small><strong>Find stores near you</strong></span>
+    </a>
+    <a href="#shopping-list" class="header-basket">
+      <.icon name="hero-shopping-cart" class="h-6 w-6" /> Your list
+    </a>
+  </div>
 </header>
+<nav class="retail-nav" aria-label="Shopping navigation">
+  <a href="#comparison"><.icon name="hero-squares-2x2" class="h-4 w-4" /> Compare supermarkets</a>
+  <a href="#shopping-list">Shopping list</a>
+  <a href="#assistant-heading">Shopping assistant</a>
+  <span>Carrefour · Quickmart · Naivas · Foodplus</span>
+</nav>
 <main class="tool-main">
   <.flash_group flash={@flash} />
   {@inner_content}

@@ -1,20 +1,53 @@
 <div class="deal-workspace">
+  <section class="retail-search" aria-label="Find groceries">
+    <div class="search-category">
+      <.icon name="hero-shopping-bag" class="h-4 w-4" /> Groceries
+    </div>
+    <.form for={@chat_form} phx-submit="send-message" class="chat-form" id="chat-form">
+      <div class="chat-compose flex gap-2">
+        <.input
+          field={@chat_form[:message]}
+          placeholder="Search groceries or add your list, e.g. 2 litres of milk"
+          aria-label="Shopping request"
+          disabled={@agent_status == :thinking}
+          autocomplete="off"
+        />
+
+        <button
+          type="submit"
+          aria-label="Search groceries"
+          disabled={@agent_status == :thinking}
+          class={[
+            "rounded px-4 py-2 text-white",
+            @agent_status == :thinking &&
+              "cursor-not-allowed bg-gray-400",
+            @agent_status != :thinking &&
+              "bg-black"
+          ]}
+        >
+          <.icon name="hero-magnifying-glass" class="h-5 w-5" />
+          <span class="search-button-label">Search</span>
+        </button>
+      </div>
+    </.form>
+    <span class="search-note">One list. Four supermarkets.</span>
+  </section>
   <section class="workspace-intro">
-    <p class="eyebrow">YOUR SHOPPING WORKSPACE</p>
-    <h1 class="text-3xl font-bold">A better basket starts here.</h1>
+    <p class="eyebrow">SMARTER EVERYDAY SHOPPING</p>
+    <h1 class="text-3xl font-bold">Your groceries. The right price.</h1>
 
     <p class="mt-2 text-gray-600">
-      Build your list in chat. Compare live supermarket prices. Pick the products that work for you.
+      Compare supermarket prices in one place. Build your basket with confidence.
     </p>
 
-    <div class="shopping-list-panel">
+    <div id="shopping-list" class="shopping-list-panel">
       <h2 class="text-xl font-semibold">
-        Your list
+        Your shopping list <span class="list-count">{length(@shopping_list.items)} items</span>
       </h2>
 
       <%= if ShoppingList.empty?(@shopping_list) do %>
         <p class="mt-4 text-gray-500">
-          Your list will appear here as you add items in chat.
+          Start with the search above. Add a single item or your whole grocery list.
         </p>
       <% else %>
         <ul class="shopping-list-chips">
@@ -40,10 +73,12 @@
     </div>
   </section>
   <section
-    class="mb-6 rounded-xl border border-gray-200 bg-white p-4"
+    class="delivery-panel mb-6 rounded-xl border border-gray-200 bg-white p-4"
     aria-labelledby="delivery-heading"
   >
-    <h2 id="delivery-heading" class="text-lg font-semibold">Shop near you</h2>
+    <h2 id="delivery-heading" class="text-lg font-semibold">
+      <.icon name="hero-map-pin" class="h-5 w-5" /> Shop near you
+    </h2>
     <div id="browser-location" phx-hook="BrowserLocation" data-auto-location class="mt-3">
       <button
         type="button"
@@ -251,38 +286,11 @@
         </div>
       </div>
 
-      <.form
-        for={@chat_form}
-        phx-submit="send-message"
-        class="chat-form border-t p-4"
-        id="chat-form"
-      >
-        <div class="chat-compose flex gap-2">
-          <.input
-            field={@chat_form[:message]}
-            placeholder="e.g. 2 litres of milk"
-            aria-label="Shopping request"
-            disabled={@agent_status == :thinking}
-            autocomplete="off"
-          />
-
-          <button
-            type="submit"
-            disabled={@agent_status == :thinking}
-            class={[
-              "rounded px-4 py-2 text-white",
-              @agent_status == :thinking &&
-                "cursor-not-allowed bg-gray-400",
-              @agent_status != :thinking &&
-                "bg-black"
-            ]}
-          >
-            Send
-          </button>
-        </div>
-      </.form>
+      <a href="#chat-form" class="assistant-search-link">
+        Add items to your list <span aria-hidden="true">↑</span>
+      </a>
     </section>
-    <div class="comparison-workspace">
+    <div id="comparison" class="comparison-workspace">
       <section :if={ShoppingList.empty?(@shopping_list)} class="comparison-empty">
         <div class="empty-store-labels">
           <span :for={store <- @stores}>{store.label}</span>
@@ -291,12 +299,12 @@
           <.icon name="hero-squares-2x2" class="h-10 w-10" />
         </div>
         <p class="eyebrow">FOUR STORES. ONE CLEAR VIEW.</p>
-        <h2>Your next shop, side by side.</h2>
+        <h2>Compare before you checkout.</h2>
         <p>
-          Add your first item in chat to see available products, choose your favourites, and build a total for each supermarket.
+          Search for the groceries you need. Compare products and pack prices, select your favourites, and see your basket total at each supermarket.
         </p>
         <div class="empty-steps">
-          <span><b>01</b> Tell us your list</span><span><b>02</b> Pick your products</span><span><b>03</b> Compare totals</span>
+          <span><b>01</b> Search your groceries</span><span><b>02</b> Pick your products</span><span><b>03</b> Compare totals</span>
         </div>
       </section>
 
@@ -485,8 +493,12 @@
                             {product.name}
                           </a>
                           <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                            <span class="font-semibold">{format_price(product.price)}</span>
-                            <span class="text-gray-600">{format_product_size(product)}</span>
+                            <span class="product-price font-semibold">
+                              {format_price(product.price)}
+                            </span>
+                            <span class="product-size text-gray-600">
+                              {format_product_size(product)}
+                            </span>
                             <span class={
                               if product.in_stock, do: "text-green-700", else: "text-gray-500"
                             }>
