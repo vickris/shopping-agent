@@ -107,7 +107,9 @@
               end}
             </p>
             <p role="status" aria-live="polite" class="mt-1 text-xs text-gray-600">
-              {profile.message}
+              {if profile.status == "unavailable",
+                do: "Could not find a store that delivers near you.",
+                else: profile.message}
             </p>
             <p :if={profile.label} class="mt-1 text-xs text-gray-500">
               Store location: {profile.label}
@@ -355,6 +357,10 @@
                     >
                       Pack size unknown · check and adjust the pack count below.
                     </p>
+                    <.product_thumbnail
+                      id={"#{store.id}-selected-image-#{item.id}"}
+                      product={selection.product}
+                    />
                     <p class="mt-1 font-semibold">{selection.product.name}</p>
                     <p class="mt-1 text-sm">
                       {format_product_size(selection.product)} per pack · {format_price(
@@ -461,11 +467,15 @@
                         <li
                           :for={product <- visible_products}
                           class={[
-                            "#{store.id}-product rounded border p-3",
+                            "#{store.id}-product product-card rounded border p-3",
                             selections[item.id] && selections[item.id].product.id == product.id &&
                               "border-blue-500 bg-blue-50"
                           ]}
                         >
+                          <.product_thumbnail
+                            id={"#{store.id}-image-#{item.id}-#{product.id}"}
+                            product={product}
+                          />
                           <a
                             href={product.url}
                             target="_blank"

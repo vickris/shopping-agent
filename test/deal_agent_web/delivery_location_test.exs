@@ -179,13 +179,21 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     retry = "#naivas-delivery button[phx-value-action='locate']"
     wait_until(fn -> has_element?(view, retry, "Retry automatically") end)
     refute has_element?(view, "#naivas-delivery button[phx-value-action='confirm']")
+
+    assert has_element?(
+             view,
+             "#naivas-delivery",
+             "Could not find a store that delivers near you."
+           )
+
+    refute render(view) =~ "The store could not confirm automatically."
     assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed == false
-    assert has_element?(view, ".naivas-error", "The store could not confirm automatically.")
+    assert has_element?(view, ".naivas-error", "Could not find a store that delivers near you.")
     render_async(view, 1000)
     refute has_element?(view, ".naivas-error", "Waiting for")
     wait_until(fn -> is_nil(:sys.get_state(DealAgent.Delivery.Sessions)[id].busy) end)
     view |> form("form[id^='naivas-filter-']", %{query: "milk"}) |> render_submit()
-    assert has_element?(view, ".naivas-error", "The store could not confirm automatically.")
+    assert has_element?(view, ".naivas-error", "Could not find a store that delivers near you.")
     view |> element("button[id^='naivas-retry-location-']") |> render_click()
     wait_until(fn -> has_element?(view, "#naivas-delivery", "Location confirmed") end)
     assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed

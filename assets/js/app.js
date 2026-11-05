@@ -26,7 +26,25 @@ import topbar from "../vendor/topbar"
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {
-  hooks: {BrowserLocation},
+  hooks: {
+    BrowserLocation,
+    ProductImage: {
+      mounted() {
+        this.onImageError = event => {
+          if (event.target.tagName === "IMG") event.target.hidden = true
+        }
+        this.el.addEventListener("error", this.onImageError, true)
+        this.updated()
+      },
+      updated() {
+        const img = this.el.querySelector("img")
+        if (img) img.hidden = img.complete && img.naturalWidth === 0
+      },
+      destroyed() {
+        this.el.removeEventListener("error", this.onImageError, true)
+      }
+    }
+  },
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken}
 })

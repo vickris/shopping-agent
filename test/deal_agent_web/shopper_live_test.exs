@@ -91,6 +91,20 @@ defmodule DealAgentWeb.ShopperLiveTest do
     assert has_element?(view, ".carrefour-product", "Brookside Whole Milk 1L")
     assert has_element?(view, ".carrefour-product", "KES 189.00")
     assert has_element?(view, ".carrefour-product", "500 ml")
+
+    assert has_element?(
+             view,
+             ".carrefour-product img[alt='Brookside Whole Milk 1L'][loading='lazy']"
+           )
+
+    assert has_element?(view, ".carrefour-product .product-image-fallback", "No image")
+    view |> element(".carrefour-product button[phx-value-product-id='milk-1']") |> render_click()
+
+    assert has_element?(
+             view,
+             ".carrefour-selection img[src='https://images.example.com/milk-1.jpg']"
+           )
+
     refute has_element?(view, ".carrefour-loading")
     refute has_element?(view, ".carrefour-error")
   end

@@ -10,7 +10,7 @@ defmodule DealAgent.Supermarkets.Carrefour.MockClient do
          quantity: "1",
          unit: :litre,
          url: "https://www.carrefour.ke/mafken/en/milk/p/milk-1",
-         image_url: nil,
+         image_url: "https://images.example.com/milk-1.jpg",
          in_stock: true
        },
        %{

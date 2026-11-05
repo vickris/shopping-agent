@@ -1269,8 +1269,43 @@ defmodule DealAgentWeb.ShopperLive do
     end)
   end
 
-  defp search_error_message({:location_setup_failed, message}, _) when is_binary(message),
-    do: message
+  attr :id, :string, required: true
+  attr :product, :any, required: true
+
+  defp product_thumbnail(assigns) do
+    url = assigns.product.image_url
+
+    image_url =
+      case is_binary(url) && URI.parse(url) do
+        %URI{scheme: scheme, host: host} when scheme in ["https", "http"] and is_binary(host) ->
+          url
+
+        _ ->
+          nil
+      end
+
+    assigns = assign(assigns, :image_url, image_url)
+
+    ~H"""
+    <div id={@id} class="product-thumbnail" phx-hook="ProductImage">
+      <span class="product-image-fallback" role="img" aria-label="Product image unavailable">
+        <.icon name="hero-shopping-bag" class="h-6 w-6" />
+        <span>No image</span>
+      </span>
+      <img
+        :if={@image_url}
+        src={@image_url}
+        alt={@product.name}
+        loading="lazy"
+        decoding="async"
+        referrerpolicy="no-referrer"
+      />
+    </div>
+    """
+  end
+
+  defp search_error_message({:location_setup_failed, _message}, _),
+    do: "Could not find a store that delivers near you."
 
   defp search_error_message(reason, _) when reason in [:location_unconfirmed, :location_changed],
     do:
