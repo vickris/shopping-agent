@@ -9,9 +9,8 @@ a,button,input { transition:background-color .15s,border-color .15s,box-shadow .
 button:focus-visible,a:focus-visible,summary:focus-visible { outline:3px solid #e89b32; outline-offset:3px; }
 a { color:var(--teal); }
 .tool-header { min-height:76px; padding:12px 32px; display:flex; align-items:center; gap:36px; justify-content:space-between; background:var(--navy); color:white; }
-.tool-brand { display:flex; align-items:center; position:relative; color:white; font-size:29px; font-weight:750; letter-spacing:-1px; padding-bottom:4px; }
-.tool-brand::after { content:""; position:absolute; bottom:0; left:47px; width:65px; height:7px; border-bottom:3px solid #ffb54c; border-radius:50%; transform:rotate(-5deg); }
-.brand-light { font-weight:400; }.brand-domain { font-size:14px; letter-spacing:0; align-self:flex-end; margin-bottom:7px; margin-left:2px; color:#d5d9d9; }
+.tool-brand { display:flex; align-items:center; color:white; font-size:29px; font-weight:750; letter-spacing:-1px; }
+.brand-light { font-weight:400; margin-left:5px; }
 .brand-icon { display:grid; place-items:center; color:#ffb54c; margin-right:10px; }
 .header-caption { flex:1; font-size:13px; color:#c7cdd3; }
 .header-actions { display:flex; align-items:center; gap:30px; }
