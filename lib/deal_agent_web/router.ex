@@ -3,7 +3,6 @@ defmodule DealAgentWeb.Router do
 
   pipeline :browser do
     plug :accepts, ["html"]
-    plug DealAgentWeb.Plugs.BetaAccess
     plug :fetch_session
     plug :fetch_live_flash
     plug :put_root_layout, html: {DealAgentWeb.Layouts, :root}

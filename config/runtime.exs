@@ -64,19 +64,15 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  if byte_size(secret_key_base) < 64 do
+    raise "SECRET_KEY_BASE must be at least 64 bytes. Generate one with: mix phx.gen.secret"
+  end
+
   host = System.get_env("PHX_HOST") || System.get_env("RENDER_EXTERNAL_HOSTNAME") || "example.com"
 
   config :deal_agent,
     local_browser_enabled: System.get_env("LOCAL_BROWSER_ENABLED", "false") == "true",
     max_browser_sessions: String.to_integer(System.get_env("MAX_BROWSER_SESSIONS", "8"))
-
-  if password = System.get_env("BETA_PASSWORD") do
-    if password == "", do: raise("BETA_PASSWORD must not be empty")
-
-    config :deal_agent, :beta_auth,
-      username: System.get_env("BETA_USERNAME", "friends"),
-      password: password
-  end
 
   port = String.to_integer(System.get_env("PORT") || "4000")
 

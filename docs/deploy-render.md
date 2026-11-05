@@ -17,7 +17,9 @@ implementation. The existing local development flow remains available.
    displayed price for both resources and database storage before creating them.
    A Hobby workspace can use paid compute; a paid workspace subscription is not
    required for this beta.
-4. Enter `OPENROUTER_API_KEY` directly in Render's secret environment field.
+4. Enter `OPENROUTER_API_KEY` and `SECRET_KEY_BASE` directly in Render's secret
+   environment fields. Generate the latter locally with `mix phx.gen.secret`
+   (at least 64 bytes); do not use a shorter automatically generated value.
    The Blueprint sets `LLM_PROVIDER=openrouter` and uses
    `openai/gpt-4.1-mini`; change the model only to one that supports the
    intent-capture tool call. Do not paste API keys into chat, source files or
@@ -25,18 +27,17 @@ implementation. The existing local development flow remains available.
 5. Create the Blueprint. The Docker build compiles the Phoenix release, installs
    the matching Firefox and Chromium binaries and checks that both launch as the
    unprivileged runtime user. The pre-deploy command runs database migrations.
-6. When healthy, open the HTTPS service URL. Get the generated `BETA_PASSWORD`
-   from the service environment settings and sign in with username `friends`.
-   Share the URL and password privately with invited testers.
+6. When healthy, open the HTTPS service URL and share it with testers. The
+   shopping page is public and does not require a username or password.
 
 Render supplies the public hostname automatically. `/health` is public and checks
-database connectivity; the shopping interface requires the beta password.
+database connectivity; the shopping interface is public.
 
 ## Exact dashboard settings
 
 Use **New → Blueprint** with `vickris/shopping-agent`, branch `main`, and
 Blueprint path `render.yaml`. This is the preferred path because it wires the
-internal database URL, generated secrets and migration command automatically.
+internal database URL and migration command automatically.
 Push the local commits first so Render builds the current UI and Foodplus fix.
 If a previous service used the native Elixir runtime, create this Docker service
 alongside it and verify it before removing the old service.
@@ -55,7 +56,7 @@ If creating the resources manually, use these settings:
   Automatic deploys: off. No persistent disk is needed on the web service.
 - Environment: use all values in `render.yaml`. For manual creation, supply the
   database's **internal** URL as `DATABASE_URL`, generate `SECRET_KEY_BASE` with
-  `mix phx.gen.secret`, and choose a strong `BETA_PASSWORD`. Put the
+  `mix phx.gen.secret` (minimum 64 bytes). Put the
   `OPENROUTER_API_KEY` directly in Render's Environment settings.
 
 `LOCAL_BROWSER_ENABLED=false` disables manual desktop windows and checkout; it
@@ -67,6 +68,15 @@ Render sets `RENDER_EXTERNAL_HOSTNAME`, which the app already uses. Leave
 `PHX_HOST` unset for an `onrender.com` domain. Browser geolocation must be used
 through the HTTPS URL. Set `PHX_HOST` to your hostname if adding a custom domain.
 
+## Fix an existing short secret and password-gated deployment
+
+In the web service's Environment settings, replace `SECRET_KEY_BASE` with the
+output of `mix phx.gen.secret` run locally. Keep the value secret and do not
+regenerate it on each start. Delete legacy `BETA_USERNAME` and `BETA_PASSWORD`
+variables. Deploy the latest code; the public router no longer uses the beta gate.
+Changing the cookie secret invalidates existing sessions, so reload the app after
+deployment. A short secret is rejected at startup with an explicit message.
+
 ## Verify before inviting friends
 
 If an initial attempt used Render's native **Elixir** runtime, create a new
@@ -76,7 +86,7 @@ and installs the required browser engines and system libraries. The native
 Elixir service can be removed once the Docker service has been verified.
 
 - Confirm `/health` returns `{"status":"ok"}`.
-- Open the homepage in a private browser session and verify the password prompt.
+- Open the homepage without credentials and verify that it loads normally.
 - Allow browser location access, then search for milk and select a product.
 - Check results and totals from each available supermarket. A successful image
   build proves the browser engines launch, but store access from Render's network
@@ -100,8 +110,8 @@ latency before increasing it. Closing a shopper connection releases its sessions
 
 Shopping lists and selections are not durable accounts: refreshes, disconnects
 and deployments can lose the current comparison. Each shopper has separate
-browser state, but all invitees share the beta password and the model API budget.
-Set an appropriate provider budget and rotate the beta password if needed.
+browser state, but visitors share the model API budget.
+Set an appropriate provider budget for the public demo.
 
 Automatic deploys are off to avoid interrupting active shoppers on every push.
 Use Render's manual deploy action for subsequent releases. Inspect application
