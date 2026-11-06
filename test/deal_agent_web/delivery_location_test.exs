@@ -13,8 +13,9 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     {:ok, view, _} = live(conn, "/")
     view |> form("#chat-form", chat: %{message: "2 litres of milk"}) |> render_submit()
     render_async(view, 1000)
-    assert has_element?(view, ".carrefour-error", "automatic location setup")
-    refute has_element?(view, ".carrefour-product")
+    render_async(view, 1000)
+    assert has_element?(view, ".carrefour-product")
+    assert has_element?(view, ".comparison-only-notice", "delivery to your area is unconfirmed")
     view |> form("#carrefour-delivery-form", %{area: "Syokimau"}) |> render_submit()
 
     wait_until(fn ->
@@ -26,7 +27,8 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     render_async(view, 1000)
     assert has_element?(view, ".carrefour-product", "Milk 500ml")
     assert has_element?(view, "#carrefour-delivery", "Syokimau")
-    refute has_element?(view, ".quickmart-product")
+    assert has_element?(view, ".quickmart-product")
+    assert has_element?(view, ".comparison-only-notice", "delivery to your area is unconfirmed")
     view |> form("form[id^='carrefour-filter-']", %{query: "milk"}) |> render_submit()
     render_async(view, 1000)
     view |> element("[phx-value-product-id='247170']") |> render_click()
@@ -89,7 +91,8 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     wait_until(fn -> has_element?(view, "#carrefour-delivery-form") end)
     refute has_element?(view, ".carrefour-product")
     view |> element("[phx-click='retry-search'][phx-value-store='carrefour']") |> render_click()
-    assert has_element?(view, ".carrefour-error", "automatic location setup")
+    render_async(view, 1000)
+    assert has_element?(view, ".carrefour-empty", "No products returned")
   end
 
   for store <- ~w(quickmart naivas) do
@@ -188,12 +191,21 @@ defmodule DealAgentWeb.DeliveryLocationTest do
 
     refute render(view) =~ "The store could not confirm automatically."
     assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed == false
-    assert has_element?(view, ".naivas-error", "Could not find a store that delivers near you.")
+    render_async(view, 1000)
+    refute has_element?(view, ".naivas-error")
     render_async(view, 1000)
     refute has_element?(view, ".naivas-error", "Waiting for")
     wait_until(fn -> is_nil(:sys.get_state(DealAgent.Delivery.Sessions)[id].busy) end)
     view |> form("form[id^='naivas-filter-']", %{query: "milk"}) |> render_submit()
-    assert has_element?(view, ".naivas-error", "Could not find a store that delivers near you.")
+    render_async(view, 1000)
+    assert has_element?(view, ".naivas-product", "Naivas Milk")
+
+    assert has_element?(
+             view,
+             ".comparison-only-notice",
+             "Could not find a store that delivers near you."
+           )
+
     view |> element("button[id^='naivas-retry-location-']") |> render_click()
     wait_until(fn -> has_element?(view, "#naivas-delivery", "Location confirmed") end)
     assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed

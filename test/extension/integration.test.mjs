@@ -26,13 +26,14 @@ test(`${storeName}: installed MV3 extension builds the reviewed basket in the no
     await context.addCookies([{name:'existing-store-session',value:'fixture-login',domain:host,path:'/'}]);
     const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');
     await app.waitForTimeout(150);
-    const plan={version:1,store:storeName,request_id:'demo-request-1234567890',created_at:Math.floor(Date.now()/1000),delivery:storeName==='quickmart'?{branch_id:'73',label:'Nearby branch'}:{label:'Nearby location'},products:[{id:'42',name:'Milk 500ml',query:'milk',url:storeName==='carrefour'?`https://${host}/mafken/en/milk/p/42`:`https://${host}/milk`,packs:2,expected_price:'62.00'}]};
+    const plan={version:1,store:storeName,request_id:'demo-request-1234567890',created_at:Math.floor(Date.now()/1000),delivery:storeName==='quickmart'?{branch_id:'73',label:'Nearby branch'}:{label:'Nearby location'},products:[{id:'42',name:'Milk 500ml',query:'milk',url:storeName==='carrefour'?`https://${host}/mafken/en/milk/p/42?offer=retail&sellerId=1&sid=reference`:`https://${host}/milk`,packs:2,expected_price:'62.00'}]};
     const uiEvent=context.waitForEvent('page');
     const accepted=await app.evaluate(plan=>new Promise(resolve=>{
       window.addEventListener('message',event=>{if(event.data?.source==='shopping-agent-extension')resolve(event.data);});
       window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin);
     }),plan);
     assert.equal(accepted.accepted,true);
+    assert.equal(accepted.version,manifest.version);
     assert.equal('cookies' in accepted,false);
     const ui=await uiEvent;await ui.waitForURL(/chrome-extension:.*checkout.html/);
     await ui.locator('#open').waitFor();

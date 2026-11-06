@@ -14,6 +14,10 @@ export const BrowserCheckout = {
     this.listener=event=>{
       if(event.source!==window || event.origin!==location.origin || event.data?.source!=='shopping-agent-extension' || event.data.request_id!==this.requestId)return
       clearTimeout(this.timer)
+      if (event.data.error==='Invalid product link.' && !event.data.version) {
+        this.status.textContent='Update the checkout extension to version 0.1.1 and click Reload on its chrome://extensions card, then resend the basket.'
+        return
+      }
       this.status.textContent=event.data.accepted?'Basket sent. Review it in the extension tab, sign in on the supermarket website, then build your basket there.':event.data.error || 'The extension could not receive this basket.'
     }
     window.addEventListener('message',this.listener)

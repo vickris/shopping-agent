@@ -91,6 +91,14 @@ defmodule DealAgent.Supermarkets.FoodplusTest do
     end
   end
 
+  test "zero-priced catalogue placeholders do not discard the other priced products" do
+    zero = String.replace(card("Goat milk 1L", "0"), "42", "43")
+    assert {:ok, [product]} = ResponseParser.parse(page(card("Milk 500ML", "70") <> zero))
+    assert product.id == "42"
+    assert Decimal.equal?(product.price, "70")
+    assert {:ok, []} = ResponseParser.parse(page(zero))
+  end
+
   test "only explicit empty searches are empty; malformed or foreign cards fail" do
     assert {:ok, []} =
              ResponseParser.parse(
@@ -102,7 +110,6 @@ defmodule DealAgent.Supermarkets.FoodplusTest do
           "<h1>Blocked</h1>",
           card("Milk 1L"),
           page(card("Milk 1L", "bad")),
-          page(card("Milk 1L", "0")),
           page(
             String.replace(
               card("Milk 1L"),

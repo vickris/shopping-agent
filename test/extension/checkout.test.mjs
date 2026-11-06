@@ -11,6 +11,9 @@ const basePlan=()=>({version:1,request_id:'test-request-id-123456',created_at:Ma
 
 test('basket validation restricts origins, products, quantities, expiry and payload size',()=>{
   assert.equal(validatePlan(basePlan()).products.length,1);
+  const offerPlan=basePlan();offerPlan.products[0].url+='?offer=retail&sellerId=1&sid=store#details';
+  const offered=validatePlan(offerPlan).products[0].url;
+  assert.ok(offered.includes('sellerId=1'));assert.ok(offered.includes('offer=retail'));assert.equal(new URL(offered).hash,'');
   assert.equal(appOrigin('https://deal-agent-beta.onrender.com/'),true);
   assert.equal(appOrigin('https://evil.test'),false);
   assert.equal(storeURL('https://www.quickmart.co.ke/milk','carrefour'),false);

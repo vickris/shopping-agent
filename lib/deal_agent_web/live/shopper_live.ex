@@ -91,16 +91,16 @@ defmodule DealAgentWeb.ShopperLive do
     message =
       case reason do
         "denied" ->
-          "Location permission was denied. Allow location access in your browser or enter an area below."
+          "Location permission was denied. You can still compare general catalogue prices; delivery to your area is unconfirmed."
 
         "timeout" ->
-          "Finding your location took too long. Try again or enter an area below."
+          "Finding your location took too long. You can still compare catalogue prices while delivery is unconfirmed."
 
         "unsupported" ->
-          "Location access needs HTTPS or localhost and a supported browser. You can enter an area below."
+          "Location access needs HTTPS or localhost and a supported browser. General catalogue comparison is still available."
 
         _ ->
-          "Your location is unavailable. Try again or enter an area below."
+          "Your location is unavailable. You can still compare catalogue prices; delivery is unconfirmed."
       end
 
     {:noreply, assign(socket, :location_message, message)}
@@ -286,7 +286,16 @@ defmodule DealAgentWeb.ShopperLive do
              socket.assigns[store.selections_key],
              store.adapter.name()
            ) do
-      profile = socket.assigns.delivery_sessions[store.id] || %{}
+      comparison_only =
+        Enum.any?(
+          Map.values(socket.assigns[store.selections_key]),
+          &Map.get(&1, :comparison_only, false)
+        )
+
+      profile =
+        if comparison_only,
+          do: %{label: "General catalogue — confirm delivery and prices in the store"},
+          else: socket.assigns.delivery_sessions[store.id] || %{}
 
       delivery = %{
         label: Map.get(profile, :label) || Map.get(profile, :area),
@@ -503,9 +512,10 @@ defmodule DealAgentWeb.ShopperLive do
            item_id,
            selection
            |> Map.put(:search_query, result.query)
+           |> Map.put(:comparison_only, Map.get(result.metadata || %{}, :comparison_only, false))
            |> Map.put(
              :delivery_session_id,
-             get_in(socket.assigns.delivery_sessions, [store.id, :id])
+             get_in(result.metadata || %{}, [:delivery_session_id])
            )
          )
        )}
@@ -1004,13 +1014,7 @@ defmodule DealAgentWeb.ShopperLive do
                :delivery_sessions,
                Map.put(socket.assigns.delivery_sessions, store_id, updated)
              )
-             |> assign(
-               store.results_key,
-               Map.new(
-                 socket.assigns.shopping_list.items,
-                 &{&1.id, {:error, {:location_setup_failed, message}}}
-               )
-             )
+             |> search_store_items(store)
              |> location_progress()}
 
           %{"type" => "setup_error", "message" => message} ->
@@ -1115,7 +1119,7 @@ defmodule DealAgentWeb.ShopperLive do
             "Nearby stores are ready. Select your products, then Shop now."
 
           true ->
-            "Some stores could not confirm your location automatically. Available stores are ready; failed stores can retry in location settings."
+            "Some stores could not confirm delivery near you. You can still compare their general catalogue prices; check delivery and final prices on the store website."
         end
 
       assign(socket, :location_message, message)
@@ -1193,68 +1197,79 @@ defmodule DealAgentWeb.ShopperLive do
       )
       |> assign(store.selections_key, Map.delete(socket.assigns[store.selections_key], item.id))
 
-    if (is_nil(profile) or profile.status != "confirmed") and
-         Application.get_env(:deal_agent, :require_delivery_location, true) do
-      result =
-        cond do
-          profile && profile.status == "opening" ->
-            :loading
+    confirmed = not is_nil(profile) and profile.status == "confirmed"
 
-          profile && profile.status == "unavailable" ->
-            {:error, {:location_setup_failed, profile.message}}
+    comparison_only =
+      not confirmed and Application.get_env(:deal_agent, :require_delivery_location, true)
 
-          true ->
-            {:error, :location_unconfirmed}
+    catalogue_options = Keyword.put(options, :comparison_only, true)
+
+    options =
+      cond do
+        confirmed ->
+          options
+          |> Keyword.put(:client, Module.concat(store.adapter, BrowserClient))
+          |> Keyword.put(:delivery_session, {self(), profile.id})
+
+        comparison_only ->
+          Keyword.put(options, :comparison_only, true)
+
+        true ->
+          options
+      end
+
+    task =
+      if confirmed,
+        do: {:search_store, store.id, item.id, profile.id},
+        else: {:search_store, store.id, item.id}
+
+    socket
+    |> assign(store.results_key, Map.put(socket.assigns[store.results_key], item.id, :loading))
+    |> start_async(task, fn ->
+      response = store.adapter.search(search_item, options)
+
+      {response, comparison_only} =
+        case response do
+          {:error, reason} when confirmed and reason != :session_busy ->
+            {store.adapter.search(search_item, catalogue_options), true}
+
+          _ ->
+            {response, comparison_only}
         end
 
-      assign(
-        socket,
-        store.results_key,
-        Map.put(socket.assigns[store.results_key], item.id, result)
-      )
-    else
-      options =
-        if profile && profile.status == "confirmed",
-          do:
-            options
-            |> Keyword.put(:client, Module.concat(store.adapter, BrowserClient))
-            |> Keyword.put(:delivery_session, {self(), profile.id}),
-          else: options
+      case response do
+        {:ok, result} ->
+          metadata =
+            if confirmed and not comparison_only do
+              Map.merge(result.metadata || %{}, %{
+                delivery_session_id: profile.id,
+                delivery_area: profile.area,
+                delivery_label: profile.label,
+                branch_id: Map.get(profile, :branch_id),
+                branch: Map.get(profile, :branch),
+                delivery_confirmation:
+                  if(Map.get(profile, :confirmation) == "user_override",
+                    do: :user_override,
+                    else: :user_confirmed
+                  )
+              })
+            else
+              Map.merge(result.metadata || %{}, %{
+                comparison_only: comparison_only,
+                delivery_confirmation: :unverified
+              })
+            end
 
-      task =
-        if profile,
-          do: {:search_store, store.id, item.id, profile.id},
-          else: {:search_store, store.id, item.id}
+          {:ok, %{result | requested_item: item, metadata: metadata}}
 
-      socket
-      |> assign(store.results_key, Map.put(socket.assigns[store.results_key], item.id, :loading))
-      |> start_async(task, fn ->
-        case store.adapter.search(search_item, options) do
-          {:ok, result} ->
-            metadata =
-              if profile,
-                do:
-                  Map.merge(result.metadata || %{}, %{
-                    delivery_session_id: profile.id,
-                    delivery_area: profile.area,
-                    delivery_label: profile.label,
-                    branch_id: Map.get(profile, :branch_id),
-                    branch: Map.get(profile, :branch),
-                    delivery_confirmation:
-                      if(Map.get(profile, :confirmation) == "user_override",
-                        do: :user_override,
-                        else: :user_confirmed
-                      )
-                  }),
-                else: result.metadata
+        other ->
+          other
+      end
+    end)
+  end
 
-            {:ok, %{result | requested_item: item, metadata: metadata}}
-
-          other ->
-            other
-        end
-      end)
-    end
+  defp search_store_items(socket, store) do
+    Enum.reduce(socket.assigns.shopping_list.items, socket, &search_store(&2, &1, store))
   end
 
   defp invalidate_store(socket, store) do

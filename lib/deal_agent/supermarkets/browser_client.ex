@@ -27,9 +27,10 @@ defmodule DealAgent.Supermarkets.BrowserClient do
         end
 
       nil ->
-        if Application.get_env(:deal_agent, :require_delivery_location, true),
-          do: {:error, :location_unconfirmed},
-          else: fetch_default(query, store, opts)
+        if Application.get_env(:deal_agent, :require_delivery_location, true) and
+             not Keyword.get(opts, :comparison_only, false),
+           do: {:error, :location_unconfirmed},
+           else: fetch_default(query, store, opts)
     end
   end
 

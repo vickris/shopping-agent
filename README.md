@@ -154,7 +154,7 @@ through when present on the calling process.
 Search events do not contain queries, product names, URLs, raw browser output,
 exception text or worker/caller process references. Result counts describe the
 parsed browser response, before the adapter's product normalization and user
-selection. No new model calls or automatic search retries are introduced.
+selection. No new model calls are introduced. A failed location-specific search can make one labelled general-catalogue fallback attempt.
 
 ## Searching inside a comparison cell
 
@@ -180,7 +180,7 @@ location settings are tucked under **Store status and optional location settings
 
 Searches and cart preparation reuse that store's temporary browser context,
 including its location and Quickmart branch. Cookies remain in memory in the
-browser process and are not exported. Unconfirmed stores are not searched.
+browser process and are not exported. Unconfirmed delivery does not block price comparison: general catalogue prices are labelled comparison-only.
 Closing or changing the location clears that store's results and selections;
 a detected location change stops the operation rather than searching a default
 area. Once a cart is prepared, the window is reserved for reviewing that basket.

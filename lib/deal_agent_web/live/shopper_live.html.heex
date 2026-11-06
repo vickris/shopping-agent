@@ -55,7 +55,7 @@
         Refresh my location
       </button>
       <p class="mt-2 text-sm text-gray-600">
-        Allow location access to find the service area or nearby branch for each supermarket. Your coordinates are shared with Carrefour, Quickmart, Naivas, Foodplus and their map providers in temporary store sessions.
+        Compare catalogue prices with or without location access. Allow location access to check the service area or nearby branch for each supermarket. Your coordinates are shared with Carrefour, Quickmart, Naivas, Foodplus and their map providers in temporary store sessions.
       </p>
       <p
         data-location-progress
@@ -97,7 +97,7 @@
 
                 profile.status != "confirmed" ->
                   if(Map.get(profile, :source) == :browser_location,
-                    do: "Store unavailable",
+                    do: "Delivery unconfirmed",
                     else: "Confirmation needed"
                   )
 
@@ -168,7 +168,7 @@
           <% else %>
             <p class="mt-1 text-sm text-gray-500">Delivery not confirmed</p>
             <p :if={!@local_browser_enabled} class="mt-2 text-xs text-gray-500">
-              Allow browser location access to search this store in the online preview.
+              Catalogue prices remain available for comparison. Allow location access to check nearby delivery.
             </p>
             <form
               :if={@local_browser_enabled}
@@ -211,7 +211,7 @@
         </h2>
 
         <p class="text-sm text-gray-500">
-          Add one item or write your whole list. We’ll search the supermarkets whose delivery locations you have confirmed.
+          Add one item or write your whole list. Compare supermarket prices even when delivery to your area is unconfirmed.
         </p>
       </div>
 
@@ -310,7 +310,7 @@
         <h2 id="carrefour-heading" class="text-xl font-semibold">Compare your basket</h2>
         <p class="mt-2 text-sm text-gray-600">
           Select a product to fulfil each request. Whole packs are rounded up to cover the requested amount; you can adjust the pack count.
-          Searches use each store’s confirmed delivery session. Close or change a location to clear its old prices and selections.
+          When delivery is unconfirmed, general catalogue prices are shown for comparison. A reference catalogue does not establish delivery coverage; confirm your address and final prices at the store.
         </p>
         <div class="comparison-scroll">
           <table id="supermarket-results" class="comparison-table w-full text-left">
@@ -322,7 +322,19 @@
                   scope="col"
                   class={"store-heading store-#{store.id} px-4 py-3 font-semibold"}
                 >
-                  <span class="store-dot" aria-hidden="true"></span>{store.label}<span class="block text-xs font-normal text-gray-500">{if @delivery_sessions[store.id], do: @delivery_sessions[store.id].label || @delivery_sessions[store.id].area, else: "Delivery not confirmed"}</span>
+                  <span class="store-dot" aria-hidden="true"></span>{store.label}
+                  <span class="store-delivery-status block text-xs font-normal text-amber-800">
+                    {case get_in(@delivery_sessions, [store.id, :status]) do
+                      "confirmed" -> "Location selected · final delivery checked by store"
+                      "unavailable" -> "Could not find delivery near you · comparison available"
+                      _ -> "Delivery unconfirmed · comparison available"
+                    end}
+                  </span>
+                  <span class="block text-xs font-normal text-gray-500">
+                    {if @delivery_sessions[store.id],
+                      do: @delivery_sessions[store.id].label || @delivery_sessions[store.id].area,
+                      else: "Delivery not confirmed"}
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -454,6 +466,30 @@
                         No products returned for this search.
                       </p>
                     <% {:ok, result} -> %>
+                      <p
+                        :if={Map.get(result.metadata || %{}, :comparison_only, false)}
+                        class="comparison-only-notice mb-3 text-xs text-amber-800"
+                        role="status"
+                      >
+                        {if get_in(@delivery_sessions, [store.id, :status]) == "unavailable",
+                          do:
+                            "Could not find a store that delivers near you. Showing general catalogue prices for comparison.",
+                          else:
+                            "General catalogue prices · delivery to your area is unconfirmed. Confirm delivery and prices with the store."}
+                      </p>
+                      <button
+                        :if={
+                          get_in(@delivery_sessions, [store.id, :status]) == "unavailable" and
+                            get_in(@delivery_sessions, [store.id, :source]) == :browser_location
+                        }
+                        id={"#{store.id}-retry-location-#{item.id}"}
+                        phx-click="delivery-window"
+                        phx-value-action="locate"
+                        phx-value-store={store.id}
+                        class="mb-3 text-xs text-blue-700 underline"
+                      >
+                        Retry delivery location
+                      </button>
                       <% visible_products = filtered_products(result.products, filter_query) %>
                       <p class="mb-3 text-xs text-gray-500">
                         {length(visible_products)} of {length(result.products)} search candidates · price per pack

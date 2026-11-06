@@ -16,6 +16,7 @@ defmodule DealAgent.Supermarkets.Foodplus.ResponseParser do
           Enum.reduce_while(cards, {:ok, []}, fn card, {:ok, products} ->
             case parse_card(card) do
               {:ok, product} -> {:cont, {:ok, [product | products]}}
+              :unpriced -> {:cont, {:ok, products}}
               error -> {:halt, error}
             end
           end)
@@ -57,26 +58,30 @@ defmodule DealAgent.Supermarkets.Foodplus.ResponseParser do
              product_path?(path, id),
          true <- is_binary(value) and Regex.match?(~r/^\d+(?:\.\d{1,2})?$/, value),
          {price, ""} <- Decimal.parse(value),
-         true <- Decimal.compare(price, 0) == :gt do
+         true <- Decimal.compare(price, 0) != :lt do
       {quantity, unit, label} = title_size(name)
 
-      {:ok,
-       %{
-         id: id,
-         name: name,
-         brand: nil,
-         price: price,
-         quantity: quantity,
-         unit: unit,
-         url: href,
-         image_url: Floki.attribute(card, "img.product-image-photo", "src") |> List.first(),
-         in_stock:
-           Floki.find(
-             card,
-             "form[data-role='tocart-form'][data-product-id='#{id}'] button.tocart:not([disabled])"
-           ) != [],
-         source: %{size_label: label, size_source: :title}
-       }}
+      if Decimal.equal?(price, 0) do
+        :unpriced
+      else
+        {:ok,
+         %{
+           id: id,
+           name: name,
+           brand: nil,
+           price: price,
+           quantity: quantity,
+           unit: unit,
+           url: href,
+           image_url: Floki.attribute(card, "img.product-image-photo", "src") |> List.first(),
+           in_stock:
+             Floki.find(
+               card,
+               "form[data-role='tocart-form'][data-product-id='#{id}'] button.tocart:not([disabled])"
+             ) != [],
+           source: %{size_label: label, size_source: :title}
+         }}
+      end
     else
       _ -> {:error, {:invalid_product_card, id}}
     end

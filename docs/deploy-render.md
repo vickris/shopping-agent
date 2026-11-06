@@ -212,3 +212,33 @@ and browser memory during the demo. Existing browser caps still apply. Keep a
 single web instance; do not scale horizontally without session routing.
 
 Browser regressions: `node --test priv/carrefour_browser/remote_checkout.test.mjs`.
+
+## Price comparison when delivery is unconfirmed
+
+Delivery availability and price comparison are independent. Without a confirmed
+location, searches use a temporary public/general catalogue and label its prices
+as comparison-only. If a confirmed location-specific search fails, the app makes
+one general-catalogue fallback attempt. If that request also fails, the store
+error remains visible; the app does not fabricate prices or bypass store blocks.
+
+A failed location lookup is not proof of a retailer's coverage policy. The UI
+says no delivering store could be found and that delivery is unconfirmed. It does
+not claim that a generic/reference branch serves the shopper. Comparison-only
+prices have no confirmed delivery session ID, cannot be used for server cart
+handoff, and do not export an unrelated branch ID to the checkout extension.
+The shopper confirms the address and current prices in the native store session.
+
+Extension 0.1.1 accepts Carrefour's commerce offer/seller query parameters while
+retaining the retailer/product checks and refusing credential/redirect queries.
+After updating, replace the files in the original unpacked extension folder and
+click Reload on its chrome://extensions card. Verify version 0.1.1 and resend the
+basket; do not install a second copy alongside the old extension.
+
+Foodplus zero-price catalogue placeholders are excluded, rather than treated as
+free items or causing the entire priced result list to fail. Malformed prices
+and foreign links still fail validation.
+
+A local test validates local connectivity and the extension flow. It does not
+prove access from Render's IP address, third-party sign-in, actual delivery or
+payment compatibility. Fixture tests are labelled separately from live read-only
+searches. Inspect Render's per-store search error logs if its results differ.

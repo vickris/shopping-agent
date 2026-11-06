@@ -20,7 +20,9 @@ export function validatePlan(plan, now=Date.now()) {
       !Number.isInteger(p.packs) || p.packs<1 || p.packs>50 || typeof p.expected_price!=='string' || !/^\d{1,8}(?:\.\d{1,2})?$/.test(p.expected_price) ||
       !storeURL(p.url,plan.store)) throw Error('Invalid product in basket.');
     const u=new URL(p.url);
-    if(u.search || u.hash || (plan.store==='carrefour' ? !u.pathname.endsWith('/p/'+p.id) : /^\/(cart|checkout|customer|users|shops|login|register)(\/|$)/.test(u.pathname) || u.pathname==='/')) throw Error('Invalid product link.');
+    const commerceKeys=plan.store==='carrefour'?['offer','offerCode','sellerId','sid']:[];
+    if([...u.searchParams.keys()].some(key=>!commerceKeys.includes(key) && !/^utm_[a-z_]+$/i.test(key)) || (plan.store==='carrefour' ? !u.pathname.endsWith('/p/'+p.id) : /^\/(cart|checkout|customer|users|shops|login|register)(\/|$)/.test(u.pathname) || u.pathname==='/')) throw Error('Invalid product link.');
+    u.hash='';
     ids.add(p.id);
     return {id:p.id,name:p.name,url:u.href,query:p.query,packs:p.packs,expected_price:p.expected_price};
   });
