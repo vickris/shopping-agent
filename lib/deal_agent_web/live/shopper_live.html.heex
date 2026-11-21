@@ -646,7 +646,7 @@
                   </button>
                   <p :if={store.id != "foodplus"} class="mt-2 text-xs text-gray-500">
                     <%= if @browser_checkout_enabled do %>
-                      Builds your selected basket using the desktop extension. Sign in, review and pay on the supermarket website in your own browser.
+                      The desktop extension replaces the supermarket’s entire cart with this order. Sign in, confirm delivery, then choose Replace cart & build this order in the extension. Review and pay on the store’s website.
                     <% else %>
                       <%= if @remote_checkout_enabled do %>
                         Prepares your basket, then opens a private checkout view here. You review and pay directly in the store session.

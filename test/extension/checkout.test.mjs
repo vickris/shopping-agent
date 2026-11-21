@@ -11,13 +11,14 @@ const basePlan=()=>({version:1,request_id:'test-request-id-123456',created_at:Ma
 
 test('basket validation restricts origins, products, quantities, expiry and payload size',()=>{
   assert.equal(validatePlan(basePlan()).products.length,1);
+  assert.equal(validatePlan({...basePlan(),version:2}).version,2);
   const offerPlan=basePlan();offerPlan.products[0].url+='?offer=retail&sellerId=1&sid=store#details';
   const offered=validatePlan(offerPlan).products[0].url;
   assert.ok(offered.includes('sellerId=1'));assert.ok(offered.includes('offer=retail'));assert.equal(new URL(offered).hash,'');
   assert.equal(appOrigin('https://deal-agent-beta.onrender.com/'),true);
   assert.equal(appOrigin('https://evil.test'),false);
   assert.equal(storeURL('https://www.quickmart.co.ke/milk','carrefour'),false);
-  for(const change of [{created_at:1},{created_at:Math.floor(Date.now()/1000)+10000},{store:'other'},{version:2},{extra:'x'.repeat(65536)}])assert.throws(()=>validatePlan({...basePlan(),...change}));
+  for(const change of [{created_at:1},{created_at:Math.floor(Date.now()/1000)+10000},{store:'other'},{version:3},{extra:'x'.repeat(65536)}])assert.throws(()=>validatePlan({...basePlan(),...change}));
   for(const change of [{url:'https://evil.test/p/42'},{url:'https://www.carrefour.ke/mafken/en/milk/p/42?token=secret'},{packs:0},{packs:51},{expected_price:'NaN'},{url:'https://user:pass@www.carrefour.ke/p/42'}]){
     const plan=basePlan();Object.assign(plan.products[0],change);assert.throws(()=>validatePlan(plan));
   }
@@ -39,7 +40,7 @@ test('reported Carrefour milk and water links validate together without changing
 });
 
 for(const store of ['carrefour','quickmart','naivas']) {
-  test(`${store}: native basket is idempotent, keeps browser session, never pays`,async()=>{
+  test(`${store}: fresh cart removes old items, verifies exact contents and never pays`,async()=>{
     const browser=await chromium.launch({headless:true,channel:'chromium'});
     try{
       const host={carrefour:'www.carrefour.ke',quickmart:'www.quickmart.co.ke',naivas:'www.naivas.online'}[store];
@@ -62,20 +63,13 @@ for(const store of ['carrefour','quickmart','naivas']) {
       assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'2');
       assert.equal(await page.evaluate(()=>localStorage.getItem('paid')),null);
       assert.equal((await context.cookies()).find(c=>c.name==='normal-login').value,'fixture');
-      const receipt={product,before:3,after:5};
-      await page.evaluate(()=>set(5));
-      assert.equal((await page.evaluate(cartStep,{store,product,phase:'inspect',branch:'73'})).quantity,5);
-      assert.equal((await page.evaluate(cartStep,{store,product,phase:'cleanup',branch:'73',receipt})).ok,true);
-      assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'3');
-      // Repeating cleanup after a navigation must not subtract twice.
-      assert.equal((await page.evaluate(cartStep,{store,product,phase:'cleanup',branch:'73',receipt})).ok,true);
-      assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'3');
-      await page.evaluate(()=>set(6));
-      assert.match((await page.evaluate(cartStep,{store,product,phase:'cleanup',branch:'73',receipt})).error,/quantity changed/);
-      assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'6');
-      await page.evaluate(()=>set(2));
-      assert.equal((await page.evaluate(cartStep,{store,product,phase:'cleanup',branch:'73',receipt:{product,before:0,after:2}})).ok,true);
+      const cartURL=store==='carrefour'?`https://${host}/mafken/en/app/cart`:store==='naivas'?`https://${host}/cart/index`:url;
+      await page.goto(cartURL);
+      assert.equal((await page.evaluate(cartStep,{store,product,products:[product],phase:'verify',exact:true,branch:'73'})).error?.includes('extra products'),true);
+      assert.equal((await page.evaluate(cartStep,{store,product,phase:'clear',branch:'73'})).ok,true);
       assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'0');
+      assert.equal(await page.evaluate(()=>localStorage.getItem('extra')),'0');
+      assert.equal((await page.evaluate(cartStep,{store,product,phase:'clear',branch:'73'})).ok,true);
       assert.equal(await page.evaluate(()=>localStorage.getItem('paid')),null);
       await context.route(`https://${host}/**`,route=>route.fulfill({contentType:'text/html',body:storefront(store,{price:'99.00'})}));
       await page.goto(url);
@@ -85,3 +79,42 @@ for(const store of ['carrefour','quickmart','naivas']) {
     }finally{await browser.close();}
   });
 }
+
+
+test('Carrefour stock limit is reported before the old cart is cleared',async()=>{
+  const browser=await chromium.launch({headless:true,channel:'chromium'});
+  try {
+    const page=await browser.newPage();
+    await page.route('https://www.carrefour.ke/**',route=>route.fulfill({contentType:'text/html',body:storefront('carrefour',{max:2,extra:true})}));
+    const product={...basePlan().products[0],packs:3};
+    await page.goto(product.url);await page.evaluate(()=>set(2));
+    const result=await page.evaluate(cartStep,{store:'carrefour',product,phase:'preflight'});
+    assert.match(result.error,/currently allows only 2 pack/);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'2');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('extra')),null);
+  } finally {await browser.close();}
+});
+
+test('app checkout status displays extension progress and actionable errors',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const source=await readFile(new URL('../../assets/js/browser_checkout.js',import.meta.url),'utf8');
+  const {BrowserCheckout}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+  const previousWindow=globalThis.window,previousLocation=globalThis.location;
+  let listener,offer;
+  globalThis.location={origin:'http://localhost:4000'};
+  globalThis.window={addEventListener:(_type,fn)=>{listener=fn;},removeEventListener(){},postMessage(){}};
+  const status={textContent:''};
+  const hook={el:{dataset:{store:'carrefour'},querySelector:()=>status},handleEvent:(_event,fn)=>{offer=fn;}};
+  try {
+    BrowserCheckout.mounted.call(hook);offer({plan:{store:'carrefour',request_id:'progress-test'}});
+    listener({source:window,origin:location.origin,data:{source:'shopping-agent-extension',type:'basket:progress',request_id:'progress-test',message:'Carrefour currently allows only 2 packs; you selected 3.'}});
+    assert.match(status.textContent,/currently allows only 2 packs/);
+    listener({source:window,origin:location.origin,data:{source:'shopping-agent-extension',type:'basket:progress',request_id:'old-order',message:'Old order ready'}});
+    assert.match(status.textContent,/currently allows only 2 packs/);
+    offer({plan:{version:2,store:'carrefour',request_id:'fresh-order'}});
+    listener({source:window,origin:location.origin,data:{source:'shopping-agent-extension',request_id:'fresh-order',version:'0.1.3',error:'Invalid or expired basket.'}});
+    assert.match(status.textContent,/version 0.2.0 or newer/);
+    listener({source:window,origin:location.origin,data:{source:'shopping-agent-extension',request_id:'fresh-order',version:'0.2.0',type:'basket:progress',message:'Fresh cart verified'}});
+    assert.equal(status.textContent,'Fresh cart verified');
+  } finally {BrowserCheckout.destroyed.call(hook);globalThis.window=previousWindow;globalThis.location=previousLocation;}
+});

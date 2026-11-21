@@ -10,7 +10,7 @@ export function storeURL(value,store) {
 }
 export function validatePlan(plan, now=Date.now()) {
   if(!plan || typeof plan!=='object' || JSON.stringify(plan).length>65536)throw Error('Basket is too large.');
-  if(!plan || plan.version!==1 || !STORES[plan.store] || !/^[A-Za-z0-9_-]{16,64}$/.test(plan.request_id || '') ||
+  if(!plan || ![1,2].includes(plan.version) || !STORES[plan.store] || !/^[A-Za-z0-9_-]{16,64}$/.test(plan.request_id || '') ||
     !Number.isInteger(plan.created_at) || plan.created_at*1000>now+60000 || now-plan.created_at*1000>1800000 ||
     !Array.isArray(plan.products) || !plan.products.length || plan.products.length>50) throw Error('Invalid or expired basket. Send a fresh basket from Shopping Agent.');
   const ids=new Set();
@@ -32,7 +32,7 @@ export function validatePlan(plan, now=Date.now()) {
   const delivery={};
   if(typeof plan.delivery?.label==='string')delivery.label=plan.delivery.label.slice(0,200);
   if(typeof plan.delivery?.branch_id==='string' && /^\d{1,10}$/.test(plan.delivery.branch_id))delivery.branch_id=plan.delivery.branch_id;
-  return {version:1,request_id:plan.request_id,created_at:plan.created_at,store:plan.store,products,delivery};
+  return {version:plan.version,request_id:plan.request_id,created_at:plan.created_at,store:plan.store,products,delivery};
 }
 export const permissionsFor=store=>STORES[store].hosts.map(host=>`https://${host}/*`);
 export function itemURL(job) {

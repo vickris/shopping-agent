@@ -147,27 +147,29 @@ extension store separately; no store publication has been performed.
 
 The extension first shows the selected products and pack counts. The shopper
 explicitly approves access to the selected supermarket, signs in normally and
-confirms delivery, then chooses Build basket. Only then does the extension use
-store cart controls. Selected prices are checked before adding products, selected
-quantities are read before adjustment, and unrelated existing items are preserved.
-Extension 0.1.3 records before/after quantities and replaces only its previous
-additions in the same store/Quickmart branch. Existing quantities of the same
-product are kept. The shopper confirms the same store account before cleanup;
-changed or ambiguous quantities stop for manual review. Older extension orders
-have no receipt and must be removed manually once.
-The full cart may therefore cost more than the app's selected subtotal. The user
-reviews all items, delivery fees and final totals before paying. The extension
-never clicks checkout, payment or login controls.
+confirms delivery, then chooses **Replace cart & build this order**. Extension
+0.2.0 checks selected prices and visible stock limits, then empties the entire
+store cart, including items added manually. It confirms an empty cart before
+adding the new order, then verifies exact product membership, quantities and
+prices. Unknown layouts, unavailable controls, prices or stock limits stop the
+transfer with a visible reason. If the store does not expose supported removal
+controls, manually empty its cart and resume; no new items are added first.
+
+Sending a new order supersedes an unfinished transfer, closing an actively
+running helper tab first. Resuming the same order continues its current step;
+it does not clear already-added items again. Progress and errors are sent back
+to the originating app tab. Review all items, delivery fees and final totals
+before paying. The extension never clicks checkout, payment or login controls.
 
 Only basket descriptions are passed from the app. The extension does not read or
 export cookies, passwords, login tokens or payment details. It has no Google,
 payment-domain, cookie API, debugger or broad all-sites permissions. Retailer
-permissions are optional and approved per store. Temporary basket/progress data
-uses `chrome.storage.session` and expires after 30 minutes. Product/quantity
-receipts persist in `chrome.storage.local` on this device across restarts and
-stopped transfers; they are not synced or uploaded. Store authentication
-and carts remain in the shopper's own browser account. Stop / clear transfer does
-not empty the store cart. Closing an active helper tab stops further automation.
+permissions are optional and approved per store. Basket/progress data uses
+`chrome.storage.session` and expires after 30 minutes. Version 0.2.0 removes the
+persistent local product receipts used by 0.1.3; fresh carts need no ownership
+history. Store authentication and carts remain in the shopper's own browser
+account. Stop transfer does not empty the store cart. Closing an active helper
+tab stops further automation.
 
 Google sign-in takes place in a normal browser tab without scripted interaction
 or server-session transfer; identity providers and retailers can still impose
@@ -235,10 +237,10 @@ prices have no confirmed delivery session ID, cannot be used for server cart
 handoff, and do not export an unrelated branch ID to the checkout extension.
 The shopper confirms the address and current prices in the native store session.
 
-Extension 0.1.1 accepts Carrefour's commerce offer/seller query parameters while
+Extension 0.2.0 accepts Carrefour's commerce offer/seller query parameters while
 retaining the retailer/product checks and refusing credential/redirect queries.
 After updating, replace the files in the original unpacked extension folder and
-click Reload on its chrome://extensions card. Verify version 0.1.1 and resend the
+click Reload on its chrome://extensions card. Verify version 0.2.0 and resend the
 basket; do not install a second copy alongside the old extension.
 
 Foodplus zero-price catalogue placeholders are excluded, rather than treated as

@@ -35,7 +35,7 @@ defmodule DealAgentWeb.BrowserCheckoutTest do
     |> render_click()
 
     assert_push_event(view, "browser-basket", %{
-      plan: %{version: 1, store: "carrefour", products: [%{id: "milk-1", packs: 2}]}
+      plan: %{version: 2, store: "carrefour", products: [%{id: "milk-1", packs: 2}]}
     })
 
     refute has_element?(view, "#carrefour-cart-status")

@@ -248,14 +248,13 @@ Chrome/Edge checkout. Download and install the unpacked extension linked beneath
 the store total, then reload the app and choose **Checkout in my browser**.
 The extension reviews the basket, asks permission for the selected store, and
 opens a normal supermarket tab. Sign in and confirm delivery there, then return
-to the extension and choose **Location confirmed — build basket**. It checks
-selected prices and quantities without clearing unrelated cart items. Version
-0.1.3 tracks its additions locally and removes only those quantities before the
-next order. Existing quantities of the same product are preserved. Confirm the
-same supermarket account; manual quantity changes stop the transfer for review.
-Items added by older extension versions must be removed manually once. Review
-the full store basket and pay yourself. Passwords, cookies and payment details
-stay in the shopper's browser and are not exported to Shopping Agent.
+to the extension and choose **Replace cart & build this order**. Extension 0.2.0
+checks selected prices and known stock limits, empties the entire existing store
+cart (including manually added items), adds the selected quantities, and verifies
+that no old/extra products remain. A new order supersedes an unfinished transfer.
+Progress and actionable errors are shown in the app as well as the extension.
+Review the full store basket and pay yourself. Passwords, cookies and payment
+details stay in the shopper's browser and are not exported to Shopping Agent.
 
 The optional older remote viewer can be enabled with `REMOTE_CHECKOUT_ENABLED=true` and
 `LOCAL_BROWSER_ENABLED=false`. Continue to checkout then opens an interactive

@@ -304,7 +304,7 @@ defmodule DealAgentWeb.ShopperLive do
 
       plan =
         Map.merge(plan, %{
-          version: 1,
+          version: 2,
           request_id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false),
           created_at: System.system_time(:second),
           delivery: delivery

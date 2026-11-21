@@ -26,7 +26,8 @@ test(`${storeName}: installed MV3 extension builds the reviewed basket in the no
     await context.addCookies([{name:'existing-store-session',value:'fixture-login',domain:host,path:'/'}]);
     const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');
     await app.waitForTimeout(150);
-    const plan={version:1,store:storeName,request_id:'demo-request-1234567890',created_at:Math.floor(Date.now()/1000),delivery:storeName==='quickmart'?{branch_id:'73',label:'Nearby branch'}:{label:'Nearby location'},products:[{id:'42',name:'Milk 500ml',query:'milk',url:storeName==='carrefour'?`https://${host}/mafken/en/milk/p/42?offer=retail&sellerId=1&sid=reference`:`https://${host}/milk`,packs:2,expected_price:'62.00'}]};
+    await app.evaluate(()=>{window.progress=[];window.addEventListener('message',event=>{if(event.data?.type==='basket:progress')window.progress.push(event.data);});});
+    const plan={version:2,store:storeName,request_id:'demo-request-1234567890',created_at:Math.floor(Date.now()/1000),delivery:storeName==='quickmart'?{branch_id:'73',label:'Nearby branch'}:{label:'Nearby location'},products:[{id:'42',name:'Milk 500ml',query:'milk',url:storeName==='carrefour'?`https://${host}/mafken/en/milk/p/42?offer=retail&sellerId=1&sid=reference`:`https://${host}/milk`,packs:2,expected_price:'62.00'}]};
     if(storeName==='carrefour') {
       const rejected=await app.evaluate(plan=>new Promise(resolve=>{
         const listener=event=>{if(event.data?.source==='shopping-agent-extension'){window.removeEventListener('message',listener);resolve(event.data);}};
@@ -35,13 +36,13 @@ test(`${storeName}: installed MV3 extension builds the reviewed basket in the no
         window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin);
       }),plan);
       assert.match(rejected.error,/42: unsupported URL parameters/);
-      assert.match(rejected.error,/checkout 0\.1\.3; offer-links-v2/);
+      assert.match(rejected.error,/checkout 0\.2\.0; offer-links-v2/);
       assert.equal(rejected.version,manifest.version);
       assert.equal(rejected.validator,'offer-links-v2');
     }
     const uiEvent=context.waitForEvent('page');
     const accepted=await app.evaluate(plan=>new Promise(resolve=>{
-      window.addEventListener('message',event=>{if(event.data?.source==='shopping-agent-extension')resolve(event.data);});
+      window.addEventListener('message',event=>{if(event.data?.source==='shopping-agent-extension' && !event.data.type)resolve(event.data);});
       window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin);
     }),plan);
     assert.equal(accepted.accepted,true);
@@ -59,23 +60,23 @@ test(`${storeName}: installed MV3 extension builds the reviewed basket in the no
     assert.equal(await store.evaluate(()=>localStorage.getItem('paid')),null);
     await store.evaluate(()=>set(3)); // Same SKU already present, added by the shopper.
     await ui.locator('#resume:not([disabled])').click();
-    await ui.waitForFunction(()=>document.querySelector('#status').textContent.includes('Selected products and quantities checked'),{},{timeout:10000});
-    assert.equal(await store.evaluate(()=>localStorage.getItem('qty')),'5');
+    await ui.waitForFunction(()=>document.querySelector('#status').textContent.includes('Fresh cart verified'),{},{timeout:10000});
+    assert.equal(await store.evaluate(()=>localStorage.getItem('qty')),'2');
+    assert.equal(await store.evaluate(()=>localStorage.getItem('extra')),'0');
     assert.equal(await store.evaluate(()=>localStorage.getItem('paid')),null);
     assert.equal((await context.cookies(`https://${host}`)).find(c=>c.name==='existing-store-session').value,'fixture-login');
     assert.equal(manifest.permissions.includes('cookies'),false);
     assert.equal(manifest.permissions.includes('debugger'),false);
     assert.equal(manifest.optional_host_permissions.some(host=>host.includes('google')),false);
-    // Sending another order replaces only the two tracked packs, keeping the three manual packs.
-    if(storeName==='quickmart') {
-      await ui.locator('#clear').click();
-      await ui.waitForFunction(()=>document.querySelector('#empty').hidden===false);
-      assert.equal(store.isClosed(),false);
-    }
+    await app.waitForFunction(()=>window.progress.some(event=>event.status==='ready'));
+    assert.ok((await app.evaluate(()=>window.progress)).some(event=>event.message.includes('the old cart')));
+    // An unfinished/failed transfer is superseded by a new explicit order, without a Stop detour.
+    const worker=context.serviceWorkers()[0];
+    await worker.evaluate(async()=>{const {job}=await chrome.storage.session.get('job');await chrome.storage.session.set({job:{...job,status:'attention',message:'Simulated interrupted order'}});});
     const nextPlan={...plan,request_id:'second-request-1234567890',products:plan.products.map(p=>({...p,packs:1}))};
     const nextUIEvent=context.waitForEvent('page');
     const nextAccepted=await app.evaluate(plan=>new Promise(resolve=>{
-      const listener=event=>{if(event.data?.source==='shopping-agent-extension' && event.data.request_id===plan.request_id){window.removeEventListener('message',listener);resolve(event.data);}};
+      const listener=event=>{if(event.data?.source==='shopping-agent-extension' && event.data.request_id===plan.request_id && !event.data.type){window.removeEventListener('message',listener);resolve(event.data);}};
       window.addEventListener('message',listener);
       window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin);
     }),nextPlan);
@@ -84,18 +85,10 @@ test(`${storeName}: installed MV3 extension builds the reviewed basket in the no
     const nextStoreEvent=context.waitForEvent('page');await nextUI.locator('#open:not([disabled])').click();
     const nextStore=await nextStoreEvent;await nextStore.goto(`https://${host}/`);
     await nextUI.locator('#resume:not([disabled])').click();
-    await nextUI.waitForFunction(()=>document.querySelector('#status').textContent.includes('Confirm you are using the same supermarket account'));
-    assert.equal(await nextStore.evaluate(()=>localStorage.getItem('qty')),'5');
-    await nextUI.locator('#same-account').check();
-    await nextUI.locator('#resume:not([disabled])').click();
-    await nextUI.waitForFunction(()=>document.querySelector('#status').textContent.includes('Selected products and quantities checked'),{},{timeout:20000});
-    assert.equal(await nextStore.evaluate(()=>localStorage.getItem('qty')),'4');
+    await nextUI.waitForFunction(()=>document.querySelector('#status').textContent.includes('Fresh cart verified'),{},{timeout:20000});
+    assert.equal(await nextStore.evaluate(()=>localStorage.getItem('qty')),'1');
+    assert.equal(await nextStore.evaluate(()=>localStorage.getItem('extra')),'0');
     assert.equal(await nextStore.evaluate(()=>localStorage.getItem('paid')),null);
-    const worker=context.serviceWorkers()[0];
-    const receipts=await worker.evaluate(()=>chrome.storage.local.get(null));
-    const receipt=Object.values(receipts).flat().find(r=>r.product?.id==='42');
-    assert.equal(receipt.before,3);assert.equal(receipt.after,4);
-    assert.equal(receipt.request_id,nextPlan.request_id);
     await nextUI.locator('#clear').click();
 
     await ui.waitForFunction(()=>document.querySelector('#empty').hidden===false);
