@@ -1,4 +1,4 @@
-# Shopping Agent browser checkout 0.3.1 (desktop Chrome / Edge)
+# Shopping Agent browser checkout 0.3.2 (desktop Chrome / Edge)
 
 This is a demo extension, not a Chrome Web Store publication. Install it once per
 shopper's desktop browser. It does not work in mobile Chrome.
@@ -11,8 +11,11 @@ shopper's desktop browser. It does not work in mobile Chrome.
    setup tab, choose **Enable background checkout** and grant access to that store.
    This returns you to Shopping Agent. Existing store permissions are reused.
 5. Cart preparation runs automatically in an inactive supermarket tab. Stay on
-   the shopping page to see progress. The extension replaces the **entire store
-   cart**, including manually added items, with the selected products/quantities.
+   the shopping page to see progress. It first clears the **entire store cart**,
+   including manually added items, then opens each selected product link once to
+   add its requested quantity. There is no preflight product pass or repeat
+   catalogue search. Prices/stock are checked while adding, then the completed
+   cart is verified. A stock/price failure can leave an empty or partial cart.
 6. If sign-in or delivery selection is needed, choose **Open supermarket** in the
    app, complete the store prompt normally, then **Resume preparation** in the app.
    The extension has no permission to access Google or payment sites.
@@ -57,23 +60,28 @@ eligibility must be reviewed before payment. Automated fixture tests exercise
 fresh-cart replacement in all three stores; real-store behavior can still vary.
 
 For an update, replace all files in the original unpacked extension folder and
-click Reload on its chrome://extensions card. Check version 0.3.1; do not install
+click Reload on its chrome://extensions card. Check version 0.3.2; do not install
 a second copy. Refresh Shopping Agent and send a new order after updating.
 The updated app sends protocol version 3 so older extensions reject fresh-cart
-orders instead of retaining the old manual review flow. Version 0.3.1 also accepts
+orders instead of retaining the old manual review flow. Version 0.3.2 also accepts
 versions 1 and 2 from previously deployed apps while you roll out the update.
 Carrefour offer/seller parameters are preserved in product links;
 credential/redirect query parameters remain unsupported. General-catalogue
 comparisons require confirming delivery and current prices in the store.
 
 Checkout errors include the background worker version and validator revision.
-Version 0.3.1 reports `offer-links-v2`; an unknown validator can indicate mixed
+Version 0.3.2 reports `offer-links-v2`; an unknown validator can indicate mixed
 extension files. The reported Carrefour milk (81030) and water (17396) offer links
 are regression-tested together.
 
-Version 0.3.1 keeps stage messages accurate between navigations. An inactive
+Version 0.3.2 keeps stage messages accurate between navigations. An inactive
 cart tab from the previous transfer is reused in the same browser window;
 active tabs, payment/checkout pages and unrelated store tabs are left alone.
 The Del Monte (38605) and toothpaste (120137) two-product regression checks
 that every old line is removed before either product is added, and that only
 one ready event is sent after both products have been verified.
+
+The current Naivas React layout is detected as unsupported before any cart
+changes. Its earlier Livewire adapter remains covered by fixtures, but the new
+site needs a separate adapter update. Quickmart product details use the direct
+product form and enforce its seller branch, without a keyword search.

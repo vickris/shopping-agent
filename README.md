@@ -245,11 +245,12 @@ the assistant never submits checkout or payment.
 Hosted deployments should use `BROWSER_CHECKOUT_ENABLED=true`,
 `REMOTE_CHECKOUT_ENABLED=false`, and `LOCAL_BROWSER_ENABLED=false` for desktop
 Chrome/Edge checkout. Download and install the unpacked extension linked beneath
-the store total, then reload the app and choose **Prepare cart**. Extension 0.3.0
+the store total, then reload the app and choose **Prepare cart**. Extension 0.3.2
 opens an inactive supermarket tab and prepares the basket while the shopper stays
-on Shopping Agent. It checks selected prices and known stock limits, empties the
-entire existing store cart (including manually added items), adds the selected
-quantities and verifies the result. Progress and a cart-ready notification appear
+on Shopping Agent. It empties the entire existing store cart (including manually
+added items), then uses each selected product link once to add the requested
+quantity. There is no extra preflight pass or repeat catalogue search. Prices
+and stock are checked during addition, and the finished cart is verified. Progress and a cart-ready notification appear
 on the shopping page; **Open cart & checkout** opens the finished supermarket cart.
 
 First use requires **Enable supermarket access**, which opens the extension's

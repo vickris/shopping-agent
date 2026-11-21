@@ -49,7 +49,7 @@ for(const store of ['carrefour','quickmart','naivas']) {
       await context.addCookies([{name:'normal-login',value:'fixture',domain:host,path:'/'}]);
       await context.route(`https://${host}/**`,route=>route.fulfill({contentType:'text/html',body:storefront(store,{extra:true})}));
       const page=await context.newPage();
-      const url=store==='carrefour'?`https://${host}/mafken/en/milk/p/42`:store==='quickmart'?`https://${host}/shops/products/73/keyword-milk`:`https://${host}/search?term=milk`;
+      const url=store==='carrefour'?`https://${host}/mafken/en/milk/p/42`:`https://${host}/milk`;
       const product={id:'42',name:'Milk 500ml',packs:2,expected_price:'62.00',query:'milk',url:store==='carrefour'?url:`https://${host}/milk`};
       await page.goto(url);
       for(let repeat=0;repeat<2;repeat++) {
@@ -82,14 +82,14 @@ for(const store of ['carrefour','quickmart','naivas']) {
 }
 
 
-test('Carrefour stock limit is reported before the old cart is cleared',async()=>{
+test('Carrefour stock limit is reported during adding without a preflight pass',async()=>{
   const browser=await chromium.launch({headless:true,channel:'chromium'});
   try {
     const page=await browser.newPage();
     await page.route('https://www.carrefour.ke/**',route=>route.fulfill({contentType:'text/html',body:storefront('carrefour',{max:2,extra:true})}));
     const product={...basePlan().products[0],packs:3};
     await page.goto(product.url);await page.evaluate(()=>set(2));
-    const result=await page.evaluate(cartStep,{store:'carrefour',product,phase:'preflight'});
+    const result=await page.evaluate(cartStep,{store:'carrefour',product,phase:'items'});
     assert.match(result.error,/currently allows only 2 pack/);
     assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'2');
     assert.equal(await page.evaluate(()=>localStorage.getItem('extra')),null);
@@ -121,4 +121,28 @@ test('app checkout status displays extension progress and actionable errors',asy
     listener({source:window,origin:location.origin,data:{source:'shopping-agent-extension',request_id:'background-order',version:'0.2.0',error:'Invalid or expired basket.'}});
     assert.match(status.textContent,/version 0.3.0 or newer/);
   } finally {BrowserCheckout.destroyed.call(hook);globalThis.window=previousWindow;globalThis.location=previousLocation;}
+});
+
+test('Quickmart direct product page refuses a different seller branch before adding',async()=>{
+  const browser=await chromium.launch({headless:true,channel:'chromium'});
+  try {
+    const page=await browser.newPage();
+    const html=storefront('quickmart').replace('<h1>Milk 500ml</h1>','<h1>Milk 500ml</h1><a href="/shops/send-message/74/42">Seller information</a>');
+    await page.route('https://www.quickmart.co.ke/**',route=>route.fulfill({contentType:'text/html',body:html}));
+    await page.goto('https://www.quickmart.co.ke/milk');
+    const product={...basePlan().products[0],url:'https://www.quickmart.co.ke/milk'};
+    assert.match((await page.evaluate(cartStep,{store:'quickmart',product,phase:'items',branch:'73'})).error,/another Quickmart branch/);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),null);
+  } finally {await browser.close();}
+});
+
+test('new Naivas layout stops explicitly before clearing or adding',async()=>{
+  const browser=await chromium.launch({headless:true,channel:'chromium'});
+  try {
+    const page=await browser.newPage();
+    await page.route('https://www.naivas.online/**',route=>route.fulfill({contentType:'text/html',body:'<main><h1>Milk</h1><button data-slot="button" onclick="document.body.dataset.changed=1">Add to Cart</button></main>'}));
+    await page.goto('https://www.naivas.online/milk');
+    assert.match((await page.evaluate(cartStep,{store:'naivas',phase:'probe'})).error,/changed its website layout/);
+    assert.equal(await page.evaluate(()=>document.body.dataset.changed),undefined);
+  } finally {await browser.close();}
 });

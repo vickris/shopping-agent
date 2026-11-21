@@ -37,7 +37,5 @@ export function validatePlan(plan, now=Date.now()) {
 export const permissionsFor=store=>STORES[store].hosts.map(host=>`https://${host}/*`);
 export function itemURL(job) {
   const p=job.plan.products[job.index];
-  if(job.plan.store==='quickmart')return `https://www.quickmart.co.ke/shops/products/${job.branch}/keyword-${encodeURIComponent(p.query)}`;
-  if(job.plan.store==='naivas')return 'https://www.naivas.online/search?term='+encodeURIComponent(p.query);
   return p.url;
 }

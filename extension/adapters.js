@@ -27,6 +27,7 @@ export async function cartStep({store,product,products,phase,branch,readonly=fal
         return {ok:true,branch:id};
       }
       if(store==='naivas') {
+        if(document.querySelector('button[data-slot="button"]') && !document.querySelector('.geoLocation'))throw issue('Naivas has changed its website layout. Automatic checkout needs an adapter update; add the selected products on its website for now.');
         await wait(()=>all('.geoLocation').find(el=>visible(el)&&text(el)&&!/select location|choose location|enter your/i.test(text(el)))).catch(()=>{throw issue('Set your delivery address on Naivas, then resume preparation here.');});
       }
       return {ok:true};
@@ -54,29 +55,8 @@ export async function cartStep({store,product,products,phase,branch,readonly=fal
       : store==='naivas' ? all('a[wire\\:click]',row).map(a=>a.getAttribute('wire:click').match(/^redirectToProductPage\((\d+)\)$/)?.[1]).find(Boolean)
       : all('a.product-profile-title',row).map(a=>path(a.href)).find(Boolean);
     const settledRows=()=>{const rows=cartRows();return rows.length?rows.every(row=>Number.isInteger(cartQuantity(row))&&cartQuantity(row)>0)?rows:null:emptyCart()?[]:null;};
-    if(phase==='preflight') {
-      if(store==='carrefour') {
-        if(!location.pathname.endsWith('/p/'+product.id))throw issue('The product redirected to a different page.');
-        const panel=await wait(()=>all('main > div.relative.grid').find(el=>el.querySelector('h1')));
-        await wait(()=>all('[role="combobox"],[data-testid="expanded-widget"],button',panel).some(el=>visible(el)&&(el.matches('[role="combobox"],[data-testid="expanded-widget"]')||text(el)==='Add to cart')));
-        await new Promise(r=>setTimeout(r,1000));
-        checkPrice(priceText(panel.querySelector('.force-ltr')),product);
-        const controls=all('div.flex.flex-col.gap-sm',panel).find(el=>text(el).includes('Get It Delivered By'));
-        if(!controls)throw issue('Confirm your delivery address on Carrefour first.');
-        const counter=all('[role="combobox"]',controls).find(visible);
-        const plus=controls.querySelector('svg[data-testid="plus-icon"]')?.closest('button') || controls.querySelector('button[aria-label="Increase quantity"]');
-        if(counter && plus?.disabled && Number(text(counter))<product.packs)throw issue(`Carrefour currently allows only ${text(counter)} pack(s) of ${product.name}; you selected ${product.packs}. Reduce the quantity or choose another product and send a new order.`);
-      } else {
-        const card=store==='quickmart'
-          ? await wait(()=>all('#products-listing .productInfoJs').find(el=>all('input.qty-input',el).some(input=>input.dataset.key===product.id)))
-          : await wait(()=>all('div.border-naivas-bg').filter(el=>all('input[name="product_id"]',el).some(input=>input.value===product.id)).sort((a,b)=>a.querySelectorAll('*').length-b.querySelectorAll('*').length)[0]);
-        if(!all('a[href]',card).some(a=>path(a.href)===path(product.url)))throw issue('The store returned a different product.');
-        checkPrice(text(card.querySelector(store==='quickmart'?'.products-price-new':'.product-price span.font-bold')),product);
-      }
-      return {ok:true};
-    }
     if(phase==='clear') {
-      if(store==='carrefour' && !location.pathname.endsWith('/app/cart') || store==='naivas' && location.pathname!=='/cart/index' || store==='quickmart' && !location.pathname.startsWith('/shops/products/'+branch+'/'))throw issue('Open the supermarket cart before replacing it.');
+      if(store==='carrefour' && !location.pathname.endsWith('/app/cart') || store==='naivas' && location.pathname!=='/cart/index')throw issue('Open the supermarket cart before replacing it.');
       if(store==='quickmart') {
         if(!visible(document.querySelector('#sideCartJs')))click(all('button.button-cart').find(visible));
         await wait(()=>visible(document.querySelector('#sideCartJs')));
@@ -127,9 +107,10 @@ export async function cartStep({store,product,products,phase,branch,readonly=fal
       throw issue('Quantity limit reached.');
     }
     if(phase==='items' && store==='quickmart') {
-      if(!location.pathname.startsWith('/shops/products/'+branch+'/'))throw issue('The Quickmart branch changed.');
-      const card=await wait(()=>all('#products-listing .productInfoJs').find(el=>all('input.qty-input',el).some(input=>input.dataset.key===product.id)));
-      if(path(card.querySelector('a.products-title')?.href)!==path(product.url))throw issue('Quickmart returned a different product.');
+      if(path(location.href)!==path(product.url))throw issue('Quickmart redirected to a different product.');
+      const card=await wait(()=>all('.product-description').find(el=>el.querySelector('h1') && all('#frmBuyProduct input.qty-input',el).some(input=>input.dataset.key===product.id)) || all('.productInfoJs').find(el=>all('input.qty-input',el).some(input=>input.dataset.key===product.id)));
+      const sellerBranch=all('a[href]',card).map(a=>a.getAttribute('href').match(/^\/shops\/send-message\/(\d+)\//)?.[1]).find(Boolean);
+      if(sellerBranch && sellerBranch!==branch)throw issue('This product belongs to another Quickmart branch. Compare products for the branch selected on its website.');
       checkPrice(text(card.querySelector('.products-price-new')),product);
       const quantity=card.querySelector('input.qty-input');
       await new Promise(r=>setTimeout(r,500));
@@ -146,8 +127,8 @@ export async function cartStep({store,product,products,phase,branch,readonly=fal
       throw issue('Quantity limit reached.');
     }
     if(phase==='items' && store==='naivas') {
+      if(path(location.href)!==path(product.url))throw issue('Naivas redirected to a different product.');
       const card=await wait(()=>all('div.border-naivas-bg').filter(el=>all('input[name="product_id"]',el).some(input=>input.value===product.id)).sort((a,b)=>a.querySelectorAll('*').length-b.querySelectorAll('*').length)[0]);
-      if(!all('a[href]',card).some(a=>path(a.href)===path(product.url)))throw issue('Naivas returned a different product.');
       checkPrice(text(card.querySelector('.product-price span.font-bold')),product);
       await new Promise(r=>setTimeout(r,750));
       const counter=()=>all('button',card).find(el=>visible(el)&&/^\d+$/.test(text(el)));

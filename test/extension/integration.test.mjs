@@ -32,7 +32,8 @@ test(`${storeName}: prepares two fresh carts in the background and notifies the 
     context=await chromium.launchPersistentContext(path.join(dir,'profile'),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extensionDir}`,`--load-extension=${extensionDir}`,`--host-resolver-rules=MAP ${host} ~NOTFOUND, MAP deal-agent-beta.onrender.com ~NOTFOUND`]});
     await context.route('https://deal-agent-beta.onrender.com/**',route=>route.fulfill({contentType:'text/html',body:appHTML(storeName)}));
     await context.route('https://deal-agent-beta.onrender.com/checkout-hook.js',route=>route.fulfill({contentType:'application/javascript',body:hookSource}));
-    await context.route(`https://${host}/**`,route=>route.fulfill({contentType:'text/html',body:storefront(storeName,{extra:true})}));
+    const retailerRequests=[];
+    await context.route(`https://${host}/**`,route=>{retailerRequests.push(route.request().url());return route.fulfill({contentType:'text/html',body:storefront(storeName,{extra:true})});});
     await context.addInitScript(({host})=>{if(location.hostname===host && !localStorage.getItem('seeded')){localStorage.setItem('qty','3');localStorage.setItem('extra','1');localStorage.setItem('seeded','true');}},{host});
     await context.addCookies([{name:'existing-store-session',value:'fixture-login',domain:host,path:'/'}]);
     const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');await app.bringToFront();
@@ -52,6 +53,8 @@ test(`${storeName}: prepares two fresh carts in the background and notifies the 
     assert.equal(await store.evaluate(()=>localStorage.getItem('qty')),'2');
     assert.equal(await store.evaluate(()=>localStorage.getItem('extra')),'0');
     assert.equal(await store.evaluate(()=>localStorage.getItem('paid')),null);
+    assert.equal(retailerRequests.some(url=>/keyword-|[?&](term|keyword)=/.test(url)),false);
+    assert.equal(retailerRequests.filter(url=>new URL(url).pathname===new URL(plan.products[0].url).pathname).length,1);
     assert.equal((await context.cookies(`https://${host}`)).find(c=>c.name==='existing-store-session').value,'fixture-login');
     const worker=context.serviceWorkers()[0];
     const active=await worker.evaluate(()=>chrome.tabs.query({active:true,currentWindow:true}));
@@ -128,7 +131,8 @@ test('Del Monte and toothpaste: clears every old line before adding both SKUs an
     context=await chromium.launchPersistentContext(path.join(dir,'profile'),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extensionDir}`,`--load-extension=${extensionDir}`,'--host-resolver-rules=MAP www.carrefour.ke ~NOTFOUND, MAP deal-agent-beta.onrender.com ~NOTFOUND']});
     await context.route('https://deal-agent-beta.onrender.com/**',route=>route.fulfill({contentType:'text/html',body:appHTML('carrefour')}));
     await context.route('https://deal-agent-beta.onrender.com/checkout-hook.js',route=>route.fulfill({contentType:'application/javascript',body:hookSource}));
-    await context.route('https://www.carrefour.ke/**',route=>route.fulfill({contentType:'text/html',body:carrefourOrderFixture(new URL(route.request().url()).pathname.match(/\/p\/(\d+)$/)?.[1])}));
+    const visited=[];
+    await context.route('https://www.carrefour.ke/**',route=>{const url=route.request().url();visited.push(url);return route.fulfill({contentType:'text/html',body:carrefourOrderFixture(new URL(url).pathname.match(/\/p\/(\d+)$/)?.[1])});});
     const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');await app.bringToFront();await app.waitForFunction(()=>window.offer);await app.waitForTimeout(150);
     const plan={version:3,store:'carrefour',request_id:'two-product-request-123456',created_at:Math.floor(Date.now()/1000),products:[
       {id:'38605',name:'Del Monte Tropical Blend Juice 1L',query:'delmonte',url:'https://www.carrefour.ke/mafken/en/juice/p/38605?offer=offer_carrefour_&sid=SLOTTED&sellerId=0000',packs:1,expected_price:'265.00'},
@@ -137,6 +141,11 @@ test('Del Monte and toothpaste: clears every old line before adding both SKUs an
     const storeEvent=context.waitForEvent('page');assert.equal((await send(app,plan)).accepted,true);const store=await storeEvent;
     await app.locator('#browser-cart-notification').waitFor({state:'visible',timeout:45000});
     assert.deepEqual(await store.evaluate(()=>JSON.parse(localStorage.getItem('basket'))),{'99':0,'38605':1,'120137':3});
+    const firstProduct=visited.findIndex(url=>/\/p\/\d+/.test(new URL(url).pathname));
+    const firstCart=visited.findIndex(url=>new URL(url).pathname.endsWith('/app/cart'));
+    assert.ok(firstCart>=0 && firstCart<firstProduct);
+    assert.equal(visited.filter(url=>new URL(url).pathname.endsWith('/app/cart')).length,2); // One clearing visit, one final verification.
+    for(const product of plan.products)assert.equal(visited.filter(url=>new URL(url).pathname===new URL(product.url).pathname).length,1);
     const changes=await store.evaluate(()=>JSON.parse(localStorage.getItem('changes')));
     const firstAddition=changes.find(change=>change.quantity>(change.before[change.id]||0));
     assert.ok(firstAddition);assert.equal(Object.values(firstAddition.before).every(q=>q===0),true);

@@ -11,17 +11,16 @@ const operationProduct=job=>job.plan.products[job.index];
 const stepMessage=job=>{
   const position=`${job.index+1} of ${job.plan.products.length}`;
   if(job.phase==='probe')return 'Checking your supermarket session…';
-  if(job.phase==='preflight')return `Checking product ${position}: ${operationProduct(job).name}…`;
   if(job.phase==='clear')return 'Clearing the previous supermarket cart…';
   if(job.phase==='items')return `Adding product ${position}: ${operationProduct(job).name}…`;
   if(job.phase==='verify')return `Checking added product ${position}: ${operationProduct(job).name}…`;
   return 'Verifying your completed cart…';
 };
 const isCartTab=(tab,store,windowId)=>tab && !tab.active && (windowId===undefined || tab.windowId===windowId) && storeURL(tab.url,store) &&
-  (store==='quickmart'?new URL(tab.url).pathname.startsWith('/shops/products/'):new URL(tab.url).pathname===new URL(STORES[store].cart).pathname);
+  (store==='quickmart'?(new URL(tab.url).pathname==='/' || new URL(tab.url).pathname.startsWith('/shops/products/')):new URL(tab.url).pathname===new URL(STORES[store].cart).pathname);
 
 const destination=job=>{
-  if(['clear','verify','finalverify'].includes(job.phase))return job.plan.store==='quickmart'?`https://www.quickmart.co.ke/shops/products/${job.branch}/keyword-${encodeURIComponent(operationProduct(job).query)}`:STORES[job.plan.store].cart;
+  if(['clear','verify','finalverify'].includes(job.phase))return STORES[job.plan.store].cart;
   return itemURL(job);
 };
 
@@ -99,12 +98,15 @@ async function drive() {
       }
       if(job.phase==='probe') {
         if(job.plan.delivery.branch_id && result.branch!==job.plan.delivery.branch_id)throw Error('Your Quickmart branch differs from the compared branch. Open the store and select the same branch, or compare again.');
-        return {...job,branch:result.branch,started:true,index:0,phase:'preflight'};
+        return {...job,branch:result.branch,started:true,index:0,phase:'clear'};
       }
       if(job.phase==='clear')return {...job,index:0,phase:'items'};
-      if(job.phase==='items')return {...job,phase:'verify'};
+      if(job.phase==='items') {
+        if(job.plan.store==='naivas')return {...job,phase:'verify'};
+        const index=job.index+1;
+        return {...job,index:index<job.plan.products.length?index:0,phase:index<job.plan.products.length?'items':'finalverify'};
+      }
       const index=job.index+1;
-      if(job.phase==='preflight')return {...job,index:index<job.plan.products.length?index:0,phase:index<job.plan.products.length?'preflight':'clear'};
       return {...job,index:index<job.plan.products.length?index:0,phase:index<job.plan.products.length?'items':'finalverify'};
     });
     if(next)await go(next,destination(next));
@@ -173,7 +175,7 @@ async function receive(message,sender) {
       if(job.plan.delivery.branch_id && result.branch!==job.plan.delivery.branch_id)throw Error('Your Quickmart branch differs from the compared branch. Select the same branch or compare prices again.');
       let next={...job,branch:result.branch};
       if(job.branch && job.branch!==result.branch)throw Error('The branch changed during this transfer. Return to the previous branch or stop the transfer.');
-      if(!job.started || job.phase==='probe')next={...next,started:true,index:0,phase:'preflight'};
+      if(!job.started || job.phase==='probe')next={...next,started:true,index:0,phase:'clear'};
       await go(next,destination(next));
       return {ok:true};
     }catch(error){await attention(job.plan.request_id,error.message);throw error;}
