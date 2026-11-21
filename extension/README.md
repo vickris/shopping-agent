@@ -1,4 +1,4 @@
-# Shopping Agent browser checkout 0.1.1 (desktop Chrome / Edge)
+# Shopping Agent browser checkout 0.1.2 (desktop Chrome / Edge)
 
 This is a demo extension, not a Chrome Web Store publication. Install it once per
 shopper's desktop browser. It does not work in mobile Chrome.
@@ -47,7 +47,11 @@ Only compared prices for selected items are checked; store order totals, fees,
 stock and delivery eligibility must be reviewed before payment.
 
 For an update, replace files in the original unpacked extension folder and click
-Reload on its chrome://extensions card. Check version 0.1.1; do not install a
+Reload on its chrome://extensions card. Check version 0.1.2; do not install a
 second copy. Carrefour offer/seller parameters are preserved in product links;
 credential/redirect query parameters remain unsupported. General-catalogue
 comparisons require confirming delivery and current prices in the store.
+
+Checkout errors include the background worker version and validator revision.
+Version 0.1.2 reports `offer-links-v2`; an unknown validator can indicate mixed extension files.
+The reported Carrefour milk (81030) and water (17396) offer links are regression-tested together.

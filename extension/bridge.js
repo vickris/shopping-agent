@@ -8,7 +8,7 @@ window.addEventListener('message', async event => {
   try {
     if(JSON.stringify(event.data.plan || {}).length>65536)return;
     const result=await chrome.runtime.sendMessage({type:'basket:import',plan:event.data.plan});
-    window.postMessage({source:'shopping-agent-extension',version:checkoutVersion,request_id:request,...result},location.origin);
+    window.postMessage({source:'shopping-agent-extension',version:checkoutVersion,request_id:request,...result,error:result.error ? `${result.error} (checkout ${result.version || checkoutVersion}; ${result.validator || 'unknown validator'})` : undefined},location.origin);
   }catch {
     window.postMessage({source:'shopping-agent-extension',version:checkoutVersion,request_id:request,error:'Reload Shopping Agent after installing or updating the extension.'},location.origin);
   }

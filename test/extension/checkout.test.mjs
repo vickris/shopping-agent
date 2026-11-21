@@ -25,6 +25,19 @@ test('basket validation restricts origins, products, quantities, expiry and payl
   assert.equal('cookies' in validatePlan({...basePlan(),cookies:'never-export'}),false);
 });
 
+test('reported Carrefour milk and water links validate together without changing offers',()=>{
+  const plan=basePlan();
+  plan.products=[
+    ['81030','uht-milk-full-fat/lato-fino-uht-milk-500ml'],
+    ['17396','still-water/quencher-life-premium-water-nrb10l']
+  ].map(([id,path])=>({...plan.products[0],id,url:`https://www.carrefour.ke/mafken/en/${path}/p/${id}?offer=offer_carrefour_&sid=SLOTTED&sellerId=0000`}));
+  assert.deepEqual(validatePlan(plan).products,plan.products);
+  const mismatch=structuredClone(plan);mismatch.products[0].id='999';
+  assert.throws(()=>validatePlan(mismatch),/999: product ID does not match/);
+  const unsupported=structuredClone(plan);unsupported.products[0].url+='&token=private';
+  assert.throws(()=>validatePlan(unsupported),/81030: unsupported URL parameters/);
+});
+
 for(const store of ['carrefour','quickmart','naivas']) {
   test(`${store}: native basket is idempotent, keeps browser session, never pays`,async()=>{
     const browser=await chromium.launch({headless:true,channel:'chromium'});

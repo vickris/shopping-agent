@@ -27,6 +27,18 @@ test(`${storeName}: installed MV3 extension builds the reviewed basket in the no
     const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');
     await app.waitForTimeout(150);
     const plan={version:1,store:storeName,request_id:'demo-request-1234567890',created_at:Math.floor(Date.now()/1000),delivery:storeName==='quickmart'?{branch_id:'73',label:'Nearby branch'}:{label:'Nearby location'},products:[{id:'42',name:'Milk 500ml',query:'milk',url:storeName==='carrefour'?`https://${host}/mafken/en/milk/p/42?offer=retail&sellerId=1&sid=reference`:`https://${host}/milk`,packs:2,expected_price:'62.00'}]};
+    if(storeName==='carrefour') {
+      const rejected=await app.evaluate(plan=>new Promise(resolve=>{
+        const listener=event=>{if(event.data?.source==='shopping-agent-extension'){window.removeEventListener('message',listener);resolve(event.data);}};
+        window.addEventListener('message',listener);
+        plan.products[0].url+='&token=private';
+        window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin);
+      }),plan);
+      assert.match(rejected.error,/42: unsupported URL parameters/);
+      assert.match(rejected.error,/checkout 0\.1\.2; offer-links-v2/);
+      assert.equal(rejected.version,manifest.version);
+      assert.equal(rejected.validator,'offer-links-v2');
+    }
     const uiEvent=context.waitForEvent('page');
     const accepted=await app.evaluate(plan=>new Promise(resolve=>{
       window.addEventListener('message',event=>{if(event.data?.source==='shopping-agent-extension')resolve(event.data);});

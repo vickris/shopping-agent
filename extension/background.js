@@ -120,7 +120,8 @@ async function receive(message,sender) {
   throw Error('Unknown extension action.');
 }
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
-  receive(message,sender).then(reply,error=>reply({error:String(error.message || 'Checkout extension error').slice(0,500)}));return true;
+  const respond=result=>reply({...result,version:chrome.runtime.getManifest().version,validator:'offer-links-v2'});
+  receive(message,sender).then(respond,error=>respond({error:String(error.message || 'Checkout extension error').slice(0,500)}));return true;
 });
 chrome.tabs.onUpdated.addListener((_id,change)=>{if(change.status==='complete')drive().catch(()=>{});});
 chrome.tabs.onRemoved.addListener(tabId=>{exclusive(async()=>{const job=await read();if(job?.tabId===tabId)await write({...job,tabId:null,status:'attention',message:'The supermarket tab closed. Clear this transfer and send a new basket; your store cart remains in your browser account.'});}).catch(()=>{});});
