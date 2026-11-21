@@ -109,10 +109,7 @@
               end}
             </p>
             <p role="status" aria-live="polite" class="mt-1 text-xs text-gray-600">
-              {if profile.status == "unavailable" and
-                    Map.get(profile, :location_error) != "address_details_required",
-                  do: "Could not find a store that delivers near you.",
-                  else: profile.message}
+              {profile.message}
             </p>
             <p :if={profile.label} class="mt-1 text-xs text-gray-500">
               Store location: {profile.label}
@@ -327,7 +324,7 @@
                   <span class="store-delivery-status block text-xs font-normal text-amber-800">
                     {case get_in(@delivery_sessions, [store.id, :status]) do
                       "confirmed" -> "Location selected · final delivery checked by store"
-                      "unavailable" -> "Could not find delivery near you · comparison available"
+                      "unavailable" -> "Delivery unconfirmed · location check failed"
                       _ -> "Delivery unconfirmed · comparison available"
                     end}
                   </span>
@@ -472,11 +469,7 @@
                         class="comparison-only-notice mb-3 text-xs text-amber-800"
                         role="status"
                       >
-                        {if get_in(@delivery_sessions, [store.id, :status]) == "unavailable",
-                          do:
-                            "Could not find a store that delivers near you. Showing general catalogue prices for comparison.",
-                          else:
-                            "General catalogue prices · delivery to your area is unconfirmed. Confirm delivery and prices with the store."}
+                        General catalogue prices · delivery to your area is unconfirmed. Confirm delivery and prices with the store.
                       </p>
                       <button
                         :if={

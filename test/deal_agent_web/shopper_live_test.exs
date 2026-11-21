@@ -435,6 +435,26 @@ defmodule DealAgentWeb.ShopperLiveTest do
     |> render_click()
   end
 
+  test "server access denials explain missing hits without claiming no delivery", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+    add_item(view, "milk")
+    render_async(view, 1000)
+
+    for store <- ["quickmart", "foodplus"] do
+      view |> form("form[id^='#{store}-filter-']", %{query: "access denied"}) |> render_submit()
+      render_async(view, 1000)
+
+      assert has_element?(
+               view,
+               ".#{store}-error",
+               "refused access from the Shopping Agent server (HTTP 403)"
+             )
+
+      assert has_element?(view, ".#{store}-error", "does not indicate delivery coverage or stock")
+      refute has_element?(view, ".#{store}-error", "Could not find a store that delivers")
+    end
+  end
+
   test "cell search replaces only that store's results and retains the requested quantity", %{
     conn: conn
   } do

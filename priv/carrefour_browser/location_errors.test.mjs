@@ -28,3 +28,14 @@ test('Naivas address form is unconfirmed rather than a delivery exclusion',()=>{
   assert.match(result.message,/full delivery address and contact details/);
   assert.doesNotMatch(result.message,/does not deliver|could not find a store/i);
 });
+
+test('store access denial is distinct from delivery coverage and excludes raw data',()=>{
+  for(const store of ['quickmart','foodplus']) {
+    const failure=locationFailure(store,Object.assign(Error('store_unavailable secret-query'),{locationStage:'loading_store',httpStatus:403}));
+    assert.equal(failure.error,'store_access_denied');
+    assert.equal(failure.http_status,403);
+    assert.match(failure.message,/refused access.*HTTP 403/);
+    assert.match(failure.message,/Delivery could not be checked/);
+    assert.doesNotMatch(JSON.stringify(failure),/secret-query|does not deliver|could not find a store/i);
+  }
+});

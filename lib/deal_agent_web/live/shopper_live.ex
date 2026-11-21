@@ -1417,7 +1417,7 @@ defmodule DealAgentWeb.ShopperLive do
   end
 
   defp search_error_message({:location_setup_failed, _message}, _),
-    do: "Could not find a store that delivers near you."
+    do: "The store location check failed. Delivery to your area is unconfirmed."
 
   defp search_error_message(reason, _) when reason in [:location_unconfirmed, :location_changed],
     do:
@@ -1437,6 +1437,10 @@ defmodule DealAgentWeb.ShopperLive do
   defp store_search_url(%{id: "naivas"}, query), do: Naivas.Client.search_url(query)
   defp store_search_url(%{id: "quickmart"}, query), do: Quickmart.Client.search_url(query)
   defp store_search_url(_, query), do: Carrefour.Client.search_url(query)
+
+  defp search_error_message({:browser_http_error, status}) when status in [401, 403],
+    do:
+      "Carrefour refused access from the Shopping Agent server (HTTP #{status}). This does not indicate delivery coverage or stock. Open the store search below to view products in your browser."
 
   defp search_error_message(:unexpected_search_response),
     do: "Carrefour did not return a readable search page. Please try again later."

@@ -186,10 +186,10 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     assert has_element?(
              view,
              "#naivas-delivery",
-             "Could not find a store that delivers near you."
+             "The store could not confirm automatically."
            )
 
-    refute render(view) =~ "The store could not confirm automatically."
+    refute render(view) =~ "Could not find a store that delivers near you."
     assert :sys.get_state(DealAgent.Delivery.Sessions)[id].confirmed == false
     render_async(view, 1000)
     refute has_element?(view, ".naivas-error")
@@ -203,7 +203,7 @@ defmodule DealAgentWeb.DeliveryLocationTest do
     assert has_element?(
              view,
              ".comparison-only-notice",
-             "Could not find a store that delivers near you."
+             "delivery to your area is unconfirmed"
            )
 
     view |> element("button[id^='naivas-retry-location-']") |> render_click()

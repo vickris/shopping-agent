@@ -16,6 +16,10 @@ export const locationProgress=stage=>phases[stage]||phases.opening_location;
 export function locationFailure(store,error) {
   const stage=Object.hasOwn(phases,error.locationStage)?error.locationStage:'opening_location';
   if(store==='naivas' && error.message==='address_details_required')return {stage,error:'address_details_required',message:'Naivas requires a full delivery address and contact details before confirming this location. You can still compare general catalogue prices; finish address setup on Naivas before checkout.'};
+  if([401,403].includes(error.httpStatus)) {
+    const label={carrefour:'Carrefour',quickmart:'Quickmart',naivas:'Naivas',foodplus:'Foodplus'}[store]||'The store';
+    return {stage,error:'store_access_denied',http_status:error.httpStatus,message:`${label} refused access from the Shopping Agent server (HTTP ${error.httpStatus}). Delivery could not be checked. You can open the store website in your browser.`};
+  }
   const messages={
     loading_store:'could not load its website',
     opening_location:'could not open its location selector',

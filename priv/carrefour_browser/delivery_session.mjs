@@ -65,7 +65,7 @@ const cents = value => {
 };
 async function navigate(url) {
   const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
-  if(!response?.ok())throw Error('store_unavailable');
+  if(!response?.ok())throw Object.assign(Error('store_unavailable'),{httpStatus:response?.status()});
 }
 const identity = (ignoreDialog = false) => readLocation(page, setup.store, {ignoreDialog});
 async function assertLocation() {
@@ -97,7 +97,7 @@ async function locateAutomatically(reload=false) {
     } catch(error) {
       failure=locationFailure(setup.store,error);
       if(onError)await onError(error);
-      if(error.message==='address_details_required')break;
+      if(error.message==='address_details_required' || [401,403].includes(error.httpStatus))break;
     }
   }
   emit({type:'setup',status:'unavailable',...failure});
@@ -212,7 +212,7 @@ try {
   if(point)emit({type:'setup',status:'opening',stage:'loading_store',message:locationProgress('loading_store')});
   for(let attempt=0;attempt<2;attempt++) {
     try {await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : setup.store==='foodplus'?roots.foodplus+'catalogsearch/result/?q=milk':roots.naivas+'search?q=milk');break;}
-    catch(error){if(attempt===1){error.locationStage='loading_store';throw error;}}
+    catch(error){if(attempt===1 || [401,403].includes(error.httpStatus)){error.locationStage='loading_store';throw error;}}
   }
   try { initialIdentity=await identity(true); } catch {}
   if(onSetup)await onSetup(page);

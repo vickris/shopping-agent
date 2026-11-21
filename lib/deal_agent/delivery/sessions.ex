@@ -268,7 +268,7 @@ defmodule DealAgent.Delivery.Sessions do
               else: "unknown"
 
           code =
-            if event["error"] in ~w(map_service_rejected location_timeout location_not_saved address_not_found location_unconfirmed map_timeout location_setup_failed),
+            if event["error"] in ~w(map_service_rejected location_timeout location_not_saved address_not_found location_unconfirmed map_timeout location_setup_failed store_access_denied address_details_required),
               do: event["error"],
               else: "location_setup_failed"
 

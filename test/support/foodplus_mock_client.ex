@@ -22,5 +22,6 @@ defmodule DealAgent.Supermarkets.Foodplus.MockClient do
   end
 
   def search("unreadable"), do: {:error, :unexpected_search_response}
+  def search("access denied"), do: {:error, {:browser_http_error, 403}}
   def search(_), do: {:ok, []}
 end
