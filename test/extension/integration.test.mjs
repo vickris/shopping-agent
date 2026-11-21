@@ -42,7 +42,7 @@ test(`${storeName}: prepares two fresh carts in the background and notifies the 
       const invalid=structuredClone(plan);invalid.products[0].url+='&token=private';
       const rejected=await send(app,invalid);
       assert.match(rejected.error,/42: unsupported URL parameters/);
-      assert.match(rejected.error,/checkout 0\.3\.0; offer-links-v2/);
+      assert.ok(rejected.error.includes(`checkout ${manifest.version}; offer-links-v2`));
     }
     const storeEvent=context.waitForEvent('page');const accepted=await send(app,plan);
     assert.equal(accepted.accepted,true);assert.equal(accepted.background,true);assert.equal(accepted.version,manifest.version);
@@ -57,7 +57,7 @@ test(`${storeName}: prepares two fresh carts in the background and notifies the 
     const active=await worker.evaluate(()=>chrome.tabs.query({active:true,currentWindow:true}));
     assert.equal(active[0].url,'https://deal-agent-beta.onrender.com/');
     assert.match(await app.locator('[data-browser-checkout-status]').innerText(),/Fresh cart verified/);
-    assert.ok((await app.evaluate(()=>window.progress)).some(event=>event.message.includes('the old cart')));
+    assert.ok((await app.evaluate(()=>window.progress)).some(event=>event.message.includes('Clearing the previous supermarket cart')));
     // An old request and another app tab cannot control this transfer.
     assert.match((await control(app,'stale-request-123456789','stop')).error,/replaced/);
     const other=await context.newPage();await other.goto('https://deal-agent-beta.onrender.com/');await other.waitForFunction(()=>window.offer);await other.waitForTimeout(150);
@@ -65,16 +65,23 @@ test(`${storeName}: prepares two fresh carts in the background and notifies the 
     // Resuming an interrupted verification does not clear or add the order again.
     await worker.evaluate(async()=>{const {job}=await chrome.storage.session.get('job');await chrome.storage.session.set({job:{...job,status:'attention',message:'Simulated verification interruption'}});});
     await app.locator('[data-checkout-action="resume"]').waitFor({state:'visible'});
-    const clearsBefore=(await app.evaluate(()=>window.progress)).filter(event=>event.message.includes('the old cart')).length;
+    const clearsBefore=(await app.evaluate(()=>window.progress)).filter(event=>event.message.includes('Clearing the previous supermarket cart')).length;
     await app.locator('[data-checkout-action="resume"]').click();
     await app.waitForFunction(()=>document.querySelector('#checkout').dataset.checkoutState==='ready',{},{timeout:20000});
     assert.equal(await store.evaluate(()=>localStorage.getItem('qty')),'2');
-    assert.equal((await app.evaluate(()=>window.progress)).filter(event=>event.message.includes('the old cart')).length,clearsBefore);
+    assert.equal((await app.evaluate(()=>window.progress)).filter(event=>event.message.includes('Clearing the previous supermarket cart')).length,clearsBefore);
     // A new order supersedes an interrupted transfer without a Stop detour.
     await worker.evaluate(async()=>{const {job}=await chrome.storage.session.get('job');await chrome.storage.session.set({job:{...job,status:'attention',message:'Simulated interrupted order'}});});
     const nextPlan={...plan,request_id:'second-request-1234567890',products:plan.products.map(p=>({...p,packs:1}))};
-    const nextStoreEvent=context.waitForEvent('page');assert.equal((await send(app,nextPlan)).accepted,true);
-    const nextStore=await nextStoreEvent;
+    // Never reuse a helper that the shopper has moved to checkout/payment.
+    const checkingOut=storeName==='carrefour';
+    if(checkingOut)await store.goto(`https://${host}/mafken/en/checkout`);
+    const pageCount=context.pages().length;
+    const nextStoreEvent=checkingOut?context.waitForEvent('page'):null;
+    assert.equal((await send(app,nextPlan)).accepted,true);
+    const nextStore=checkingOut?await nextStoreEvent:store;
+    assert.equal(context.pages().length,pageCount+(checkingOut?1:0));
+    if(checkingOut)assert.equal(store.url(),`https://${host}/mafken/en/checkout`);
     await app.locator('#browser-cart-notification').waitFor({state:'visible',timeout:45000});
     assert.equal(await nextStore.evaluate(()=>localStorage.getItem('qty')),'1');
     assert.equal(await nextStore.evaluate(()=>localStorage.getItem('extra')),'0');
@@ -107,5 +114,41 @@ test('first-time store access is requested only after an explicit setup click',a
     const setup=await setupEvent;await setup.waitForURL(/chrome-extension:.*checkout.html/);
     await setup.locator('#open:not([disabled])').waitFor();
     assert.equal(await setup.locator('#open').innerText(),'Enable background checkout');
+  } finally {await context?.close();await rm(dir,{recursive:true,force:true});}
+});
+
+test('Del Monte and toothpaste: clears every old line before adding both SKUs and notifies once',async()=>{
+  const dir=await mkdtemp(path.join(os.tmpdir(),'shopping-agent-two-products-'));let context;
+  try {
+    const {carrefourOrderFixture}=await import('./fixtures.mjs');
+    const extensionDir=path.join(dir,'extension');await cp(new URL('../../extension',import.meta.url),extensionDir,{recursive:true});
+    const manifest=JSON.parse(await readFile(path.join(extensionDir,'manifest.json'),'utf8'));
+    manifest.host_permissions=[...manifest.host_permissions,...manifest.optional_host_permissions];
+    await writeFile(path.join(extensionDir,'manifest.json'),JSON.stringify(manifest));
+    context=await chromium.launchPersistentContext(path.join(dir,'profile'),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extensionDir}`,`--load-extension=${extensionDir}`,'--host-resolver-rules=MAP www.carrefour.ke ~NOTFOUND, MAP deal-agent-beta.onrender.com ~NOTFOUND']});
+    await context.route('https://deal-agent-beta.onrender.com/**',route=>route.fulfill({contentType:'text/html',body:appHTML('carrefour')}));
+    await context.route('https://deal-agent-beta.onrender.com/checkout-hook.js',route=>route.fulfill({contentType:'application/javascript',body:hookSource}));
+    await context.route('https://www.carrefour.ke/**',route=>route.fulfill({contentType:'text/html',body:carrefourOrderFixture(new URL(route.request().url()).pathname.match(/\/p\/(\d+)$/)?.[1])}));
+    const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');await app.bringToFront();await app.waitForFunction(()=>window.offer);await app.waitForTimeout(150);
+    const plan={version:3,store:'carrefour',request_id:'two-product-request-123456',created_at:Math.floor(Date.now()/1000),products:[
+      {id:'38605',name:'Del Monte Tropical Blend Juice 1L',query:'delmonte',url:'https://www.carrefour.ke/mafken/en/juice/p/38605?offer=offer_carrefour_&sid=SLOTTED&sellerId=0000',packs:1,expected_price:'265.00'},
+      {id:'120137',name:'Pepsodent Herbal Toothpaste Twin Pack 2x150g',query:'toothpaste',url:'https://www.carrefour.ke/mafken/en/herbal-toothpaste/p/120137?offer=offer_carrefour_&sid=SLOTTED&sellerId=0000',packs:3,expected_price:'374.00'}
+    ]};
+    const storeEvent=context.waitForEvent('page');assert.equal((await send(app,plan)).accepted,true);const store=await storeEvent;
+    await app.locator('#browser-cart-notification').waitFor({state:'visible',timeout:45000});
+    assert.deepEqual(await store.evaluate(()=>JSON.parse(localStorage.getItem('basket'))),{'99':0,'38605':1,'120137':3});
+    const changes=await store.evaluate(()=>JSON.parse(localStorage.getItem('changes')));
+    const firstAddition=changes.find(change=>change.quantity>(change.before[change.id]||0));
+    assert.ok(firstAddition);assert.equal(Object.values(firstAddition.before).every(q=>q===0),true);
+    const progress=await app.evaluate(()=>window.progress);
+    assert.equal(progress.filter(event=>event.status==='ready').length,1);
+    const additions=progress.filter(event=>event.message.startsWith('Adding product'));
+    assert.ok(additions.some(event=>event.message.includes('1 of 2: Del Monte')));
+    assert.ok(additions.some(event=>event.message.includes('2 of 2: Pepsodent')));
+    const clearIndex=progress.findIndex(event=>event.message.startsWith('Clearing the previous'));
+    assert.ok(clearIndex>=0);assert.equal(progress.slice(clearIndex).some(event=>event.message.startsWith('Connecting')),false);
+    const worker=context.serviceWorkers()[0];
+    assert.equal((await worker.evaluate(()=>chrome.tabs.query({active:true,currentWindow:true})))[0].url,'https://deal-agent-beta.onrender.com/');
+    assert.equal(context.pages().some(page=>page.url().startsWith('chrome-extension:')),false);
   } finally {await context?.close();await rm(dir,{recursive:true,force:true});}
 });

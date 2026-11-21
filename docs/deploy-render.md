@@ -146,9 +146,10 @@ Developer mode and Load unpacked with the extracted folder. Return to the app af
 installing; the extension connects to an already-open app tab. For a public non-developer install, publish through the browser's
 extension store separately; no store publication has been performed.
 
-Choose **Prepare cart** on the shopping page. Extension 0.3.0 opens an inactive
+Choose **Prepare cart** on the shopping page. Extension 0.3.1 opens an inactive
 supermarket tab without opening an extension review page or moving focus away
-from Shopping Agent. It checks the selected session, product prices and visible
+from Shopping Agent. Completed inactive cart tabs are reused when safe; the
+extension leaves active and checkout/payment tabs alone. It checks the selected session, product prices and visible
 stock limits, empties the entire store cart (including manually added items),
 adds the new order and verifies exact contents. The app shows progress, errors
 and a cart-ready toast with **Open cart**. Final checkout/payment stays on the
@@ -247,7 +248,7 @@ The shopper confirms the address and current prices in the native store session.
 Extension 0.3.0 accepts Carrefour's commerce offer/seller query parameters while
 retaining the retailer/product checks and refusing credential/redirect queries.
 After updating, replace the files in the original unpacked extension folder and
-click Reload on its chrome://extensions card. Verify version 0.3.0 and resend the
+click Reload on its chrome://extensions card. Verify version 0.3.1 and resend the
 basket; do not install a second copy alongside the old extension.
 
 Foodplus zero-price catalogue placeholders are excluded, rather than treated as

@@ -8,6 +8,18 @@ const write=async job=>chrome.storage.session.set({job});
 const internal=sender=>sender.id===chrome.runtime.id && sender.url?.startsWith(chrome.runtime.getURL(''));
 const ui=()=>chrome.tabs.create({url:chrome.runtime.getURL('checkout.html')});
 const operationProduct=job=>job.plan.products[job.index];
+const stepMessage=job=>{
+  const position=`${job.index+1} of ${job.plan.products.length}`;
+  if(job.phase==='probe')return 'Checking your supermarket session…';
+  if(job.phase==='preflight')return `Checking product ${position}: ${operationProduct(job).name}…`;
+  if(job.phase==='clear')return 'Clearing the previous supermarket cart…';
+  if(job.phase==='items')return `Adding product ${position}: ${operationProduct(job).name}…`;
+  if(job.phase==='verify')return `Checking added product ${position}: ${operationProduct(job).name}…`;
+  return 'Verifying your completed cart…';
+};
+const isCartTab=(tab,store,windowId)=>tab && !tab.active && (windowId===undefined || tab.windowId===windowId) && storeURL(tab.url,store) &&
+  (store==='quickmart'?new URL(tab.url).pathname.startsWith('/shops/products/'):new URL(tab.url).pathname===new URL(STORES[store].cart).pathname);
+
 const destination=job=>{
   if(['clear','verify','finalverify'].includes(job.phase))return job.plan.store==='quickmart'?`https://www.quickmart.co.ke/shops/products/${job.branch}/keyword-${encodeURIComponent(operationProduct(job).query)}`:STORES[job.plan.store].cart;
   return itemURL(job);
@@ -25,7 +37,8 @@ async function startBackground(request) {
     }
     // Start blank so browser tooling can attach before the retailer navigation.
     // active:false keeps the shopper on the comparison page throughout preparation.
-    const tab=await chrome.tabs.create({url:'about:blank',active:false});
+    const previous=job.reuseTabId?await chrome.tabs.get(job.reuseTabId).catch(()=>null):null;
+    const tab=isCartTab(previous,job.plan.store,job.appWindowId)?previous:await chrome.tabs.create({url:'about:blank',active:false,...(job.appWindowId===undefined?{}:{windowId:job.appWindowId})});
     const next={...job,tabId:tab.id,index:0,phase:'probe',status:'opening',message:'Connecting to your supermarket in the background…'};
     await write(next);
     try {
@@ -49,7 +62,7 @@ async function go(job,url) {
   const current=await exclusive(async()=>{
     const latest=await read();
     if(latest?.plan.request_id!==job.plan.request_id || latest.status==='cancelled')return false;
-    await write({...job,status:'loading',expectedURL:url});return true;
+    await write({...job,status:'loading',expectedURL:url,message:stepMessage(job)});return true;
   });
   if(current) {
     try{await chrome.tabs.update(job.tabId,{url});}
@@ -66,7 +79,7 @@ async function drive() {
       await write({...j,status:'attention',message:'The store needs your attention. Open the supermarket to sign in or confirm delivery, then resume here.'});return null;
     }
     inFlight.add(j.plan.request_id);
-    await write({...j,status:'executing',message:`Checking ${j.phase==='probe'?'your store session':j.phase==='clear'?'the old cart':j.phase==='finalverify'?'your completed cart':operationProduct(j).name}…`});
+    await write({...j,status:'executing',message:stepMessage(j)});
     return j;
   });
   if(!job)return;
@@ -108,7 +121,12 @@ async function receive(message,sender) {
       // A new explicit order supersedes the previous transfer, including failed jobs.
       // Close a running helper before accepting new instructions so it cannot keep clicking.
       if(old?.tabId && (['opening','probing','executing','loading'].includes(old.status) || inFlight.has(old.plan.request_id)))await chrome.tabs.remove(old.tabId).catch(()=>{});
-      await write({plan,flow:'fresh-cart-v1',appTabId:sender.tab.id,status:'starting',index:0,phase:'probe',message:'Preparing your fresh cart in the background…'});
+      let reuseTabId;
+      if(old?.tabId && old.plan.store===plan.store && ['ready','attention'].includes(old.status) && !inFlight.has(old.plan.request_id)) {
+        const previous=await chrome.tabs.get(old.tabId).catch(()=>null);
+        if(isCartTab(previous,plan.store,sender.tab.windowId))reuseTabId=previous.id;
+      }
+      await write({plan,flow:'fresh-cart-v1',appTabId:sender.tab.id,appWindowId:sender.tab.windowId,reuseTabId,status:'starting',index:0,phase:'probe',message:'Preparing your fresh cart in the background…'});
     });
     await startBackground(plan.request_id);const current=await read();return {accepted:true,background:true,status:current?.status,message:current?.message};
   }
