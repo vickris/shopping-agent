@@ -7,6 +7,17 @@ const read=async()=> (await chrome.storage.session.get('job')).job;
 const write=async job=>chrome.storage.session.set({job});
 const internal=sender=>sender.id===chrome.runtime.id && sender.url?.startsWith(chrome.runtime.getURL(''));
 const ui=()=>chrome.tabs.create({url:chrome.runtime.getURL('checkout.html')});
+// A local receipt survives transfer expiry/restarts. Never use it across branches.
+const historyKey=job=>'cart-history:'+job.plan.store+':'+(job.branch || 'default');
+const history=async job=>(await chrome.storage.local.get(historyKey(job)))[historyKey(job)] || [];
+const saveHistory=(job,rows)=>chrome.storage.local.set({[historyKey(job)]:rows});
+const operationProduct=job=>job.phase==='cleanup'?job.cleanup[job.index].product:job.targets?.[job.index] || job.plan.products[job.index];
+const destination=job=>{
+  if(['verify','finalverify'].includes(job.phase))return job.plan.store==='quickmart'?`https://www.quickmart.co.ke/shops/products/${job.branch}/keyword-${encodeURIComponent(operationProduct(job).query)}`:STORES[job.plan.store].cart;
+  if(job.phase==='cleanup' && job.plan.store==='naivas')return STORES.naivas.cart;
+  return itemURL({...job,plan:{...job.plan,products:[operationProduct(job)]},index:0});
+};
+
 async function runStep(tabId,args) {
   let result;
   try {result=(await chrome.scripting.executeScript({target:{tabId},func:cartStep,args:[args]}))[0]?.result;}
@@ -38,25 +49,56 @@ async function drive() {
       await write({...j,status:'attention',message:'The store redirected. Sign in or confirm delivery in the store tab, then return here and resume.'});return null;
     }
     inFlight.add(j.plan.request_id);
-    await write({...j,status:'executing',message:`Checking ${j.phase==='items'?j.plan.products[j.index].name:'your basket'}…`});
+    await write({...j,status:'executing',message:`Checking ${['items','cleanup'].includes(j.phase)?operationProduct(j).name:'your basket'}…`});
     return j;
   });
   if(!job)return;
   try {
-    const result=await runStep(job.tabId,{
-      store:job.plan.store,product:job.plan.products[job.index],products:job.plan.products,phase:job.phase,branch:job.branch
-    });
+    let current=job;
+    let product=operationProduct(current);
+    if(current.phase==='items') {
+      let receipt=(await history(current)).find(row=>row.request_id===current.plan.request_id && row.product.id===product.id);
+      if(!receipt) {
+        const inspection=await runStep(current.tabId,{store:current.plan.store,product,phase:'inspect',branch:current.branch});
+        const before=inspection.quantity;
+        if(!Number.isInteger(before) || before<0 || before+product.packs>50)throw Error('The combined store quantity exceeds the supported limit. Review the store cart.');
+        receipt={request_id:current.plan.request_id,product,before,after:before+product.packs};
+        // Journal before the first click, including partial/interrupted additions.
+        await exclusive(async()=>{
+          const latest=await read();if(latest?.plan.request_id!==current.plan.request_id)throw Error('Transfer stopped.');
+          const rows=await history(current);await saveHistory(current,[...rows.filter(r=>r.product.id!==product.id),receipt]);
+        });
+      } else {
+        const inspection=await runStep(current.tabId,{store:current.plan.store,product,phase:'inspect',branch:current.branch});
+        if(inspection.quantity<receipt.before || inspection.quantity>receipt.after)throw Error('The cart quantity changed outside this transfer. Review the store cart before resuming.');
+      }
+      product={...product,packs:receipt.after};
+      current={...current,targets:{...current.targets,[current.index]:product}};
+    }
+    const args={store:current.plan.store,product,products:current.phase==='finalverify'?Object.values(current.targets):[product],phase:['verify','finalverify'].includes(current.phase)?'verify':current.phase,branch:current.branch};
+    if(current.phase==='cleanup')args.receipt=current.cleanup[current.index];
+    if(['verify','finalverify'].includes(current.phase)) {
+      args.readonly=current.phase==='finalverify';
+      args.minimumQuantity=(await history(current)).find(row=>row.product.id===product.id)?.before;
+    }
+    const result=await runStep(current.tabId,args);
     if(!result.ok)throw Error('The store did not confirm this cart step.');
     const next=await exclusive(async()=>{
-      const latest=await read();if(latest?.plan.request_id!==job.plan.request_id || latest.status!=='executing')return null;
-      if(job.phase==='verify') {
-        await write({...job,status:'ready',message:'Selected products and quantities checked. Review every basket item, delivery fee and final total on the store website before paying.'});
+      const latest=await read();if(latest?.plan.request_id!==current.plan.request_id || latest.status!=='executing')return null;
+      if(current.phase==='finalverify') {
+        await write({...current,status:'ready',message:'Selected products and quantities checked. Previous Shopping Agent items were replaced; other basket items were kept. Review the final order on the store website before paying.'});
         return null;
       }
-      const index=job.index+1;
-      return {...job,index:index<job.plan.products.length?index:0,phase:index<job.plan.products.length?'items':'verify'};
+      if(current.phase==='cleanup') {
+        await saveHistory(current,(await history(current)).filter(r=>r.product.id!==product.id));
+        const index=current.index+1;
+        return {...current,index:index<current.cleanup.length?index:0,phase:index<current.cleanup.length?'cleanup':'items'};
+      }
+      if(current.phase==='items')return {...current,phase:'verify'};
+      const index=current.index+1;
+      return {...current,index:index<current.plan.products.length?index:0,phase:index<current.plan.products.length?'items':'finalverify'};
     });
-    if(next)await go(next,next.phase==='items'?itemURL(next):next.plan.store==='quickmart'?`https://www.quickmart.co.ke/shops/products/${next.branch}/keyword-${encodeURIComponent(next.plan.products[0].query)}`:STORES[next.plan.store].cart);
+    if(next)await go(next,destination(next));
   }catch(error){await attention(job.plan.request_id,error.message?.includes('Frame with ID')?'The store navigated during a step. Inspect the basket before resuming.':String(error.message || 'Store step interrupted. Review before resuming.'));}
   finally{inFlight.delete(job.plan.request_id);drive().catch(()=>{});}
 }
@@ -68,7 +110,7 @@ async function receive(message,sender) {
       const old=await read();
       if(old && Date.now()-old.plan.created_at*1000<1800000) {
         if(old.plan.request_id===plan.request_id)return;
-        throw Error('Finish or clear the previous basket in the extension first.');
+        if(old.status!=='ready')throw Error('Finish or stop the previous basket in the extension first.');
       }
       if(old?.tabId && ['executing','loading'].includes(old.status))await chrome.tabs.remove(old.tabId).catch(()=>{});
       await write({plan,status:'review',index:0,phase:'items',message:'Review the basket below before opening the supermarket.'});
@@ -76,7 +118,11 @@ async function receive(message,sender) {
     await ui();return {accepted:true};
   }
   if(!internal(sender))throw Error('Extension control source is not allowed.');
-  if(message.type==='job:get')return {job:await read()};
+  if(message.type==='job:get') {
+    const job=await read();
+    const all=job?await chrome.storage.local.get(null):{};
+    return {job,hasHistory:job && Object.entries(all).some(([key,rows])=>key.startsWith('cart-history:'+job.plan.store+':') && rows.length>0)};
+  }
   if(message.type==='job:clear') {
     const old=await exclusive(async()=>{const j=await read();await chrome.storage.session.remove('job');return j;});
     if(old?.tabId && ['executing','loading'].includes(old.status))await chrome.tabs.remove(old.tabId).catch(()=>{});
@@ -108,8 +154,15 @@ async function receive(message,sender) {
       if(!storeURL(tab.url,job.plan.store))throw Error('Finish signing in, then return to the supermarket in its original tab.');
       const result=await runStep(job.tabId,{store:job.plan.store,phase:'probe'});
       if(job.plan.delivery.branch_id && result.branch!==job.plan.delivery.branch_id)throw Error('Your Quickmart branch differs from the compared branch. Select the same branch or compare prices again.');
-      const next={...job,index:0,phase:'items',branch:result.branch};
-      await go(next,itemURL(next));
+      let next={...job,branch:result.branch};
+      if(job.branch && job.branch!==result.branch)throw Error('The branch changed during this transfer. Return to the previous branch or stop the transfer.');
+      const rows=await history(next);
+      if(rows.length && !message.sameAccount)throw Error('Confirm you are using the same supermarket account as the previous Shopping Agent order before replacing its items.');
+      if(!job.started) {
+        const cleanup=rows.filter(row=>row.request_id!==job.plan.request_id);
+        next={...next,started:true,cleanup,index:0,phase:cleanup.length?'cleanup':'items',targets:{}};
+      }
+      await go(next,destination(next));
       return {ok:true};
     }catch(error){await attention(job.plan.request_id,error.message);throw error;}
     finally{inFlight.delete(job.plan.request_id);drive().catch(()=>{});}

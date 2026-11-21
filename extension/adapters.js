@@ -1,6 +1,6 @@
 // Self-contained: Chrome serializes this function into an ISOLATED world.
 // Only visible cart controls are used. Never click sign-in, checkout or payment.
-export async function cartStep({store,product,products,phase,branch}) {
+export async function cartStep({store,product,products,phase,branch,receipt,readonly=false,minimumQuantity}) {
   const issue=message=>Object.assign(new Error(message),{expected:true});
   const visible=el=>Boolean(el && el.getClientRects().length && getComputedStyle(el).visibility!=='hidden');
   const all=(selector,root=document)=>Array.from(root.querySelectorAll(selector));
@@ -31,6 +31,49 @@ export async function cartStep({store,product,products,phase,branch}) {
         const location=all('.geoLocation').find(visible);
         if(!text(location))throw issue('Set your delivery address on Naivas first.');
       }
+      return {ok:true};
+    }
+    // Read before adding: existing quantities belong to the shopper, not this order.
+    if(phase==='inspect' || phase==='cleanup') {
+      let quantity, decrease;
+      if(store==='carrefour') {
+        if(!location.pathname.endsWith('/p/'+product.id))throw issue('The previous product redirected. Review its cart entry manually.');
+        const panel=await wait(()=>all('main > div.relative.grid').find(el=>el.querySelector('h1')));
+        const controls=await wait(()=>all('div.flex.flex-col.gap-sm',panel).find(el=>text(el).includes('Get It Delivered By')));
+        await wait(()=>all('[role="combobox"],button',controls).some(el=>visible(el) && (el.getAttribute('role')==='combobox'||text(el)==='Add to cart')));
+        await new Promise(r=>setTimeout(r,1000));
+        quantity=()=>{const counter=all('[role="combobox"]',controls).find(visible);return counter?Number(text(counter)):all('button',controls).some(el=>visible(el)&&text(el)==='Add to cart')?0:NaN;};
+        decrease=()=>click(controls.querySelector('svg[data-testid="minus-icon"],svg[data-testid="delete-icon"],svg[data-testid="trash-icon"]')?.closest('button'));
+      } else if(store==='quickmart') {
+        if(!location.pathname.startsWith('/shops/products/'+branch+'/'))throw issue('The Quickmart branch changed.');
+        const card=await wait(()=>all('#products-listing .productInfoJs').find(el=>all('input.qty-input',el).some(input=>input.dataset.key===product.id)));
+        if(path(card.querySelector('a.products-title')?.href)!==path(product.url))throw issue('Quickmart returned a different product.');
+        await new Promise(r=>setTimeout(r,500));
+        quantity=()=>visible(card.querySelector('.quantityBlockJs'))?Number(card.querySelector('input.qty-input').value):visible(card.querySelector('button[name="btnAddToCart"]'))?0:NaN;
+        decrease=()=>click(card.querySelector('.decrease-js'));
+      } else if(phase==='inspect') {
+        const card=await wait(()=>all('div.border-naivas-bg').filter(el=>all('input[name="product_id"]',el).some(input=>input.value===product.id)).sort((a,b)=>a.querySelectorAll('*').length-b.querySelectorAll('*').length)[0]);
+        if(!all('a[href]',card).some(a=>path(a.href)===path(product.url)))throw issue('Naivas returned a different product.');
+        await new Promise(r=>setTimeout(r,750));
+        quantity=()=>{const counter=all('button',card).find(el=>visible(el)&&/^\d+$/.test(text(el)));return counter?Number(text(counter)):all('form button',card).some(el=>visible(el)&&/ADD TO CART/i.test(text(el)))?0:NaN;};
+      } else {
+        const rows=()=>all('div.rounded-xl.p-4.w-full').filter(el=>el.querySelector('span[x-text="quantity"]'));
+        await wait(()=>rows().length || /cart is empty|basket is empty/i.test(text(document.querySelector('main') || document.body)));
+        const row=()=>rows().find(el=>all('a[wire\\:click]',el).some(a=>a.getAttribute('wire:click')===`redirectToProductPage(${product.id})`));
+        quantity=()=>row()?Number(text(row().querySelector('span[x-text="quantity"]'))):0;
+        decrease=()=>click(all('a[wire\\:click]',row()).find(a=>a.getAttribute('wire:click')===`updateQuantity(${product.id}, 'decrement')`));
+      }
+      const initial=quantity();
+      if(!Number.isInteger(initial)||initial<0)throw issue('Could not read the previous cart quantity.');
+      if(phase==='inspect')return {ok:true,quantity:initial};
+      // Already checked out / manually removed, or a previously completed cleanup.
+      if(initial===0 || initial===receipt.before)return {ok:true};
+      if(initial!==receipt.after)throw issue('The quantity changed for '+product.name+'. Review it manually; only previous Shopping Agent quantities can be removed.');
+      for(let n=initial;n>receipt.before;n--) {
+        decrease();
+        await wait(()=>quantity()===n-1);
+      }
+      if(quantity()!==receipt.before)throw issue('The previous Shopping Agent item could not be removed. Review the store cart.');
       return {ok:true};
     }
     if(phase==='items' && store==='carrefour') {
@@ -105,6 +148,7 @@ export async function cartStep({store,product,products,phase,branch}) {
           const qty=Number(text(counter()));if(!Number.isInteger(qty)||qty<1)throw issue('Could not read the cart quantity.');
           if(cents(text(row.querySelector('.font-extrabold')))!==expected(p)*BigInt(qty))throw issue('Naivas changed a selected price. Review it before continuing.');
           if(qty===p.packs)break;
+          if(readonly || (minimumQuantity!==undefined && (qty<minimumQuantity || qty>p.packs)))throw issue('Naivas cart quantity changed outside this transfer. Review it before continuing.');
           const plus=qty<p.packs;
           click(all('a[wire\\:click]',row).find(a=>a.getAttribute('wire:click')===`updateQuantity(${p.id}, '${plus?'increment':'decrement'}')`));
           await wait(()=>Number(text(counter()))===qty+(plus?1:-1));

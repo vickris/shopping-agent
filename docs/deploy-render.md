@@ -150,6 +150,11 @@ explicitly approves access to the selected supermarket, signs in normally and
 confirms delivery, then chooses Build basket. Only then does the extension use
 store cart controls. Selected prices are checked before adding products, selected
 quantities are read before adjustment, and unrelated existing items are preserved.
+Extension 0.1.3 records before/after quantities and replaces only its previous
+additions in the same store/Quickmart branch. Existing quantities of the same
+product are kept. The shopper confirms the same store account before cleanup;
+changed or ambiguous quantities stop for manual review. Older extension orders
+have no receipt and must be removed manually once.
 The full cart may therefore cost more than the app's selected subtotal. The user
 reviews all items, delivery fees and final totals before paying. The extension
 never clicks checkout, payment or login controls.
@@ -158,7 +163,9 @@ Only basket descriptions are passed from the app. The extension does not read or
 export cookies, passwords, login tokens or payment details. It has no Google,
 payment-domain, cookie API, debugger or broad all-sites permissions. Retailer
 permissions are optional and approved per store. Temporary basket/progress data
-uses `chrome.storage.session` and expires after 30 minutes. Store authentication
+uses `chrome.storage.session` and expires after 30 minutes. Product/quantity
+receipts persist in `chrome.storage.local` on this device across restarts and
+stopped transfers; they are not synced or uploaded. Store authentication
 and carts remain in the shopper's own browser account. Stop / clear transfer does
 not empty the store cart. Closing an active helper tab stops further automation.
 

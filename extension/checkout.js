@@ -1,14 +1,15 @@
 import {STORES,permissionsFor} from './policy.js';
 const $=id=>document.getElementById(id);
 let job;
-async function send(type) {
-  const result=await chrome.runtime.sendMessage({type});
+async function send(type,extra={}) {
+  const result=await chrome.runtime.sendMessage({type,...extra});
   if(result.error)throw Error(result.error);return result;
 }
 async function refresh() {
   const result=await send('job:get');job=result.job;
   $('basket').hidden=!job;$('empty').hidden=Boolean(job);
   if(!job){$('status').textContent='No active basket transfer.';return;}
+  $('previous-order').hidden=!result.hasHistory;
   $('heading').textContent=`${STORES[job.plan.store].name} checkout`;
   $('status').textContent=job.message;
   $('branch').textContent=job.plan.delivery.label?`Compared store location: ${job.plan.delivery.label}. Confirm your delivery address on the supermarket website.`:'Confirm your delivery address on the supermarket website.';
@@ -29,7 +30,7 @@ action('open',async()=>{
   if(!allowed)throw Error('Supermarket access was not granted. No basket changes were made.');
   await send('job:open');
 });
-action('resume',()=>send('job:resume'));
+action('resume',()=>send('job:resume',{sameAccount:$('same-account').checked}));
 action('focus',()=>send('job:focus'));
 action('clear',()=>send('job:clear'));
 chrome.storage.onChanged.addListener((_changes,area)=>{if(area==='session')refresh().catch(()=>{});});

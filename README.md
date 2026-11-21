@@ -249,7 +249,11 @@ the store total, then reload the app and choose **Checkout in my browser**.
 The extension reviews the basket, asks permission for the selected store, and
 opens a normal supermarket tab. Sign in and confirm delivery there, then return
 to the extension and choose **Location confirmed — build basket**. It checks
-selected prices and quantities without clearing unrelated cart items. Review
+selected prices and quantities without clearing unrelated cart items. Version
+0.1.3 tracks its additions locally and removes only those quantities before the
+next order. Existing quantities of the same product are preserved. Confirm the
+same supermarket account; manual quantity changes stop the transfer for review.
+Items added by older extension versions must be removed manually once. Review
 the full store basket and pay yourself. Passwords, cookies and payment details
 stay in the shopper's browser and are not exported to Shopping Agent.
 

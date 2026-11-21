@@ -62,6 +62,21 @@ for(const store of ['carrefour','quickmart','naivas']) {
       assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'2');
       assert.equal(await page.evaluate(()=>localStorage.getItem('paid')),null);
       assert.equal((await context.cookies()).find(c=>c.name==='normal-login').value,'fixture');
+      const receipt={product,before:3,after:5};
+      await page.evaluate(()=>set(5));
+      assert.equal((await page.evaluate(cartStep,{store,product,phase:'inspect',branch:'73'})).quantity,5);
+      assert.equal((await page.evaluate(cartStep,{store,product,phase:'cleanup',branch:'73',receipt})).ok,true);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'3');
+      // Repeating cleanup after a navigation must not subtract twice.
+      assert.equal((await page.evaluate(cartStep,{store,product,phase:'cleanup',branch:'73',receipt})).ok,true);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'3');
+      await page.evaluate(()=>set(6));
+      assert.match((await page.evaluate(cartStep,{store,product,phase:'cleanup',branch:'73',receipt})).error,/quantity changed/);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'6');
+      await page.evaluate(()=>set(2));
+      assert.equal((await page.evaluate(cartStep,{store,product,phase:'cleanup',branch:'73',receipt:{product,before:0,after:2}})).ok,true);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('qty')),'0');
+      assert.equal(await page.evaluate(()=>localStorage.getItem('paid')),null);
       await context.route(`https://${host}/**`,route=>route.fulfill({contentType:'text/html',body:storefront(store,{price:'99.00'})}));
       await page.goto(url);
       await page.evaluate(()=>set(0));

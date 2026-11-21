@@ -1,4 +1,4 @@
-# Shopping Agent browser checkout 0.1.2 (desktop Chrome / Edge)
+# Shopping Agent browser checkout 0.1.3 (desktop Chrome / Edge)
 
 This is a demo extension, not a Chrome Web Store publication. Install it once per
 shopper's desktop browser. It does not work in mobile Chrome.
@@ -13,7 +13,10 @@ shopper's desktop browser. It does not work in mobile Chrome.
    address. The extension has no permission to access Google or payment sites.
 6. Return to the extension tab and choose **Location confirmed — build basket**.
    Keep the helper tab open while it builds. It checks prices and sets selected
-   products to the requested pack counts. It does not empty your existing cart.
+   products to the requested pack counts plus quantities you already had. Before
+   adding a new order, it removes only quantities tracked from earlier Shopping
+   Agent orders in the same store/Quickmart branch. Confirm you are using the
+   same supermarket account when prompted. Changed quantities stop for review.
 7. Review all cart items, delivery fees and the final total on the supermarket
    website. Submit checkout and payment yourself. The extension never does this.
 
@@ -24,9 +27,15 @@ never blindly repeats Add to cart after a failed response. No background retries
 Clear / stop transfer closes the helper tab only if a transfer is actively
 running, to stop further input. Existing cart contents are not deleted.
 
-Basket descriptions and progress are held in `chrome.storage.session`, not synced
-or saved to disk by this extension. Instructions expire 30 minutes after export
-and clear on browser restart. Your normal store cookies remain in your browser;
+Basket descriptions and progress are held in `chrome.storage.session`.
+Instructions expire 30 minutes after export and clear on browser restart.
+A receipt of product IDs/links, prices and before/after quantities is stored in
+`chrome.storage.local` on this device so the next order can replace only the
+Shopping Agent quantities, even after restart or Stop transfer. It is not synced
+or sent to the app. Receipts are journaled before changes, so interrupted
+transfers remain tracked. If a partial change or manual edit cannot be
+reconciled, adjust the store cart manually before resuming. Removing/reinstalling
+the extension deletes its receipts; Reload preserves them. Your normal store cookies remain in your browser;
 the extension does not read or export cookies, passwords, tokens or payment data.
 No browser debugging API, remote code, server callback or login-form injection is
 used. Google sign-in is a normal interaction between you and the store/Google.
@@ -43,15 +52,18 @@ app origins. Store permissions are optional and requested per supermarket.
 
 Supported cart adapters: Carrefour, Quickmart, Naivas. Foodplus remains outside
 the automated checkout adapters. Existing unrelated basket items are kept.
+Orders built with extension 0.1.2 or earlier have no receipts: clear those old
+Shopping Agent items manually once. The extension never guesses ownership from
+product names or removes untracked products.
 Only compared prices for selected items are checked; store order totals, fees,
 stock and delivery eligibility must be reviewed before payment.
 
 For an update, replace files in the original unpacked extension folder and click
-Reload on its chrome://extensions card. Check version 0.1.2; do not install a
+Reload on its chrome://extensions card. Check version 0.1.3; do not install a
 second copy. Carrefour offer/seller parameters are preserved in product links;
 credential/redirect query parameters remain unsupported. General-catalogue
 comparisons require confirming delivery and current prices in the store.
 
 Checkout errors include the background worker version and validator revision.
-Version 0.1.2 reports `offer-links-v2`; an unknown validator can indicate mixed extension files.
+Version 0.1.3 reports `offer-links-v2`; an unknown validator can indicate mixed extension files.
 The reported Carrefour milk (81030) and water (17396) offer links are regression-tested together.
