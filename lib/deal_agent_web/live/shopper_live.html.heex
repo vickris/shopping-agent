@@ -639,14 +639,14 @@
                     }
                   >
                     {cond do
-                      @browser_checkout_enabled -> "Checkout in my browser"
+                      @browser_checkout_enabled -> "Prepare cart"
                       @local_browser_enabled or @remote_checkout_enabled -> "Shop now"
                       true -> "Checkout unavailable"
                     end}
                   </button>
                   <p :if={store.id != "foodplus"} class="mt-2 text-xs text-gray-500">
                     <%= if @browser_checkout_enabled do %>
-                      The desktop extension replaces the supermarket’s entire cart with this order. Sign in, confirm delivery, then choose Replace cart & build this order in the extension. Review and pay on the store’s website.
+                      Prepares a fresh supermarket cart in the background, replacing its existing contents. Stay here—we’ll notify you when it’s ready. Sign-in or delivery setup may need your attention.
                     <% else %>
                       <%= if @remote_checkout_enabled do %>
                         Prepares your basket, then opens a private checkout view here. You review and pay directly in the store session.
@@ -663,19 +663,32 @@
                     :if={@browser_checkout_enabled and store.id != "foodplus"}
                     id={"#{store.id}-browser-checkout"}
                     phx-hook="BrowserCheckout"
+                    phx-update="ignore"
                     data-store={store.id}
                     class="browser-checkout-panel"
                   >
                     <p data-browser-checkout-status role="status">
                       Desktop Chrome or Edge extension required.
                     </p>
+                    <div class="browser-checkout-actions">
+                      <button type="button" data-checkout-action="setup" hidden>
+                        Enable supermarket access
+                      </button>
+                      <button type="button" data-checkout-action="focus" hidden>
+                        Open supermarket
+                      </button>
+                      <button type="button" data-checkout-action="resume" hidden>
+                        Resume preparation
+                      </button>
+                      <button type="button" data-checkout-action="stop" hidden>Stop</button>
+                    </div>
                     <a href={~p"/downloads/shopping-agent-extension.zip"} download>
                       Download checkout extension
                     </a>
                     <details>
                       <summary>Install for the demo</summary>
                       <p>
-                        Unzip the download, open chrome://extensions (or edge://extensions), enable Developer mode and choose Load unpacked. Select the extracted folder, then click Checkout in my browser again.
+                        Unzip the download, open chrome://extensions (or edge://extensions), enable Developer mode and choose Load unpacked. Select the extracted folder, then click Prepare cart again.
                       </p>
                       <p>
                         The extension asks for access to the selected supermarket. Login and payment stay on that store’s website. Phones are not supported by this extension.

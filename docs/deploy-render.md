@@ -97,8 +97,9 @@ Elixir service can be removed once the Docker service has been verified.
   still needs this live check; retailer blocking can differ from a local machine.
 - On desktop Chrome/Edge, install the checkout extension using the download link
   beneath the store total. Return to Shopping Agent, select products and choose
-  Checkout in my browser. Follow the extension review, sign-in, location and cart
-  steps. Review quantities and the final total on the store website. Do not place
+  Prepare cart. Enable store access once if prompted, then stay on the shopping
+  page for background progress and the cart-ready notification. Open the finished
+  cart to review quantities and the final total on the store website. Do not place
   a real order just to test deployment. The extension is not supported on phones;
   product comparison remains available there.
 
@@ -145,27 +146,33 @@ Developer mode and Load unpacked with the extracted folder. Return to the app af
 installing; the extension connects to an already-open app tab. For a public non-developer install, publish through the browser's
 extension store separately; no store publication has been performed.
 
-The extension first shows the selected products and pack counts. The shopper
-explicitly approves access to the selected supermarket, signs in normally and
-confirms delivery, then chooses **Replace cart & build this order**. Extension
-0.2.0 checks selected prices and visible stock limits, then empties the entire
-store cart, including items added manually. It confirms an empty cart before
-adding the new order, then verifies exact product membership, quantities and
-prices. Unknown layouts, unavailable controls, prices or stock limits stop the
-transfer with a visible reason. If the store does not expose supported removal
-controls, manually empty its cart and resume; no new items are added first.
+Choose **Prepare cart** on the shopping page. Extension 0.3.0 opens an inactive
+supermarket tab without opening an extension review page or moving focus away
+from Shopping Agent. It checks the selected session, product prices and visible
+stock limits, empties the entire store cart (including manually added items),
+adds the new order and verifies exact contents. The app shows progress, errors
+and a cart-ready toast with **Open cart**. Final checkout/payment stays on the
+supermarket website.
+
+On first use, missing optional store permission shows **Enable supermarket
+access** in the app. Only that explicit click opens the extension permission
+setup. Permission approval returns the shopper to the app and starts preparation.
+If sign-in, delivery selection or a store prompt interrupts preparation, the app
+provides **Open supermarket**, **Resume preparation** and **Stop**. The extension
+never interacts with login/payment controls. If removal controls are unsupported,
+manually empty the store cart and resume; no new items are added first.
 
 Sending a new order supersedes an unfinished transfer, closing an actively
-running helper tab first. Resuming the same order continues its current step;
-it does not clear already-added items again. Progress and errors are sent back
-to the originating app tab. Review all items, delivery fees and final totals
-before paying. The extension never clicks checkout, payment or login controls.
+running helper tab first. Resuming continues the current step without clearing
+already-added items again. App commands are restricted to the originating app
+tab and current request ID. The updated app exports protocol version 3, requiring
+extension 0.3.0 or newer; older extensions cannot silently retain the review flow.
 
 Only basket descriptions are passed from the app. The extension does not read or
 export cookies, passwords, login tokens or payment details. It has no Google,
 payment-domain, cookie API, debugger or broad all-sites permissions. Retailer
 permissions are optional and approved per store. Basket/progress data uses
-`chrome.storage.session` and expires after 30 minutes. Version 0.2.0 removes the
+`chrome.storage.session` and expires after 30 minutes. Version 0.3.0 removes the
 persistent local product receipts used by 0.1.3; fresh carts need no ownership
 history. Store authentication and carts remain in the shopper's own browser
 account. Stop transfer does not empty the store cart. Closing an active helper
@@ -237,10 +244,10 @@ prices have no confirmed delivery session ID, cannot be used for server cart
 handoff, and do not export an unrelated branch ID to the checkout extension.
 The shopper confirms the address and current prices in the native store session.
 
-Extension 0.2.0 accepts Carrefour's commerce offer/seller query parameters while
+Extension 0.3.0 accepts Carrefour's commerce offer/seller query parameters while
 retaining the retailer/product checks and refusing credential/redirect queries.
 After updating, replace the files in the original unpacked extension folder and
-click Reload on its chrome://extensions card. Verify version 0.2.0 and resend the
+click Reload on its chrome://extensions card. Verify version 0.3.0 and resend the
 basket; do not install a second copy alongside the old extension.
 
 Foodplus zero-price catalogue placeholders are excluded, rather than treated as

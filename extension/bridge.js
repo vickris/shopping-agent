@@ -7,12 +7,12 @@ if(!globalThis.__shoppingAgentBridgeInstalled) {
   });
 // Only basket descriptions cross this bridge. Never read store cookies or login fields.
 window.addEventListener('message', async event => {
-  if(event.source!==window || event.origin!==location.origin || event.data?.source!=='shopping-agent' || event.data.type!=='basket:offer')return;
-  const request=event.data.plan?.request_id;
+  if(event.source!==window || event.origin!==location.origin || event.data?.source!=='shopping-agent' || !['basket:offer','basket:control'].includes(event.data.type))return;
+  const request=event.data.type==='basket:offer'?event.data.plan?.request_id:event.data.request_id;
   try {
-    if(JSON.stringify(event.data.plan || {}).length>65536)return;
-    const result=await chrome.runtime.sendMessage({type:'basket:import',plan:event.data.plan});
-    window.postMessage({source:'shopping-agent-extension',version:checkoutVersion,request_id:request,...result,error:result.error ? `${result.error} (checkout ${result.version || checkoutVersion}; ${result.validator || 'unknown validator'})` : undefined},location.origin);
+    if(JSON.stringify(event.data).length>65536)return;
+    const result=await chrome.runtime.sendMessage(event.data.type==='basket:offer'?{type:'basket:import',plan:event.data.plan}:{type:'basket:control',request_id:request,action:event.data.action});
+    window.postMessage({source:'shopping-agent-extension',version:checkoutVersion,request_id:request,control:event.data.type==='basket:control',...result,error:result.error ? `${result.error} (checkout ${result.version || checkoutVersion}; ${result.validator || 'unknown validator'})` : undefined},location.origin);
   }catch {
     window.postMessage({source:'shopping-agent-extension',version:checkoutVersion,request_id:request,error:'Reload Shopping Agent after installing or updating the extension.'},location.origin);
   }

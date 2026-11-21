@@ -20,16 +20,14 @@ export async function cartStep({store,product,products,phase,branch,readonly=fal
   try {
     if(phase==='probe') {
       if(store==='quickmart') {
-        const address=all('.js-location-address').find(visible);
-        if(!text(address) || /enter your delivery address/i.test(text(address)))throw issue('Set your delivery address on Quickmart first.');
+        const address=await wait(()=>all('.js-location-address').find(el=>visible(el)&&text(el)&&!/enter your delivery address/i.test(text(el)))).catch(()=>{throw issue('Set your delivery address on Quickmart, then resume preparation here.');});
         const links=all('a[href]');
         const id=links.map(a=>a.getAttribute('href').match(/\/shops\/report-spam\/(\d+)/)?.[1]).find(Boolean) || links.filter(a=>a.matches('.navigation-link')).map(a=>a.getAttribute('href').match(/^\/(\d+)\/?$/)?.[1]).find(Boolean);
         if(!id)throw issue('Choose and open your Quickmart branch first.');
-        return {branch:id};
+        return {ok:true,branch:id};
       }
       if(store==='naivas') {
-        const location=all('.geoLocation').find(visible);
-        if(!text(location))throw issue('Set your delivery address on Naivas first.');
+        await wait(()=>all('.geoLocation').find(el=>visible(el)&&text(el)&&!/select location|choose location|enter your/i.test(text(el)))).catch(()=>{throw issue('Set your delivery address on Naivas, then resume preparation here.');});
       }
       return {ok:true};
     }

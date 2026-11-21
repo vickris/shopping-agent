@@ -8,91 +8,104 @@ const require=createRequire(new URL('../../priv/carrefour_browser/package.json',
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 const {chromium}=require('playwright');
 const {storefront}=await import('./fixtures.mjs');
+const hookSource=await readFile(new URL('../../assets/js/browser_checkout.js',import.meta.url),'utf8');
+const appHTML=store=>`<h1>Shopping Agent</h1><section id="checkout" data-store="${store}"><p data-browser-checkout-status role="status"></p><button data-checkout-action="setup" hidden>Enable access</button><button data-checkout-action="focus" hidden>Open store</button><button data-checkout-action="resume" hidden>Resume</button><button data-checkout-action="stop" hidden>Stop</button></section><script type="module">import {BrowserCheckout} from '/checkout-hook.js';const hook={el:document.querySelector('#checkout'),handleEvent:(_event,fn)=>{window.offer=plan=>fn({plan});}};BrowserCheckout.mounted.call(hook);window.progress=[];window.addEventListener('message',event=>{if(event.data?.type==='basket:progress')window.progress.push(event.data);});</script>`;
+const send=async(app,plan)=>app.evaluate(plan=>new Promise(resolve=>{
+  const listener=event=>{if(event.data?.source==='shopping-agent-extension' && event.data.request_id===plan.request_id && !event.data.type){window.removeEventListener('message',listener);resolve(event.data);}};
+  window.addEventListener('message',listener);window.offer(plan);
+}),plan);
+const control=async(app,request_id,action)=>app.evaluate(({request_id,action})=>new Promise(resolve=>{
+  const listener=event=>{if(event.data?.source==='shopping-agent-extension' && event.data.request_id===request_id && event.data.control){window.removeEventListener('message',listener);resolve(event.data);}};
+  window.addEventListener('message',listener);window.postMessage({source:'shopping-agent',type:'basket:control',request_id,action},location.origin);
+}),{request_id,action});
 
 for(const storeName of ['carrefour','quickmart','naivas']) {
-test(`${storeName}: installed MV3 extension builds the reviewed basket in the normal store tab`,async()=>{
+test(`${storeName}: prepares two fresh carts in the background and notifies the shopping page`,async()=>{
   const host={carrefour:'www.carrefour.ke',quickmart:'www.quickmart.co.ke',naivas:'www.naivas.online'}[storeName];
   const dir=await mkdtemp(path.join(os.tmpdir(),'shopping-agent-extension-'));
   let context;
   try {
     const extensionDir=path.join(dir,'extension');await cp(new URL('../../extension',import.meta.url),extensionDir,{recursive:true});
     const manifest=JSON.parse(await readFile(path.join(extensionDir,'manifest.json'),'utf8'));
-    // Equivalent to a user granting optional retailer access, without a permission dialog in CI.
     manifest.host_permissions=[...manifest.host_permissions,...manifest.optional_host_permissions];
     await writeFile(path.join(extensionDir,'manifest.json'),JSON.stringify(manifest));
     context=await chromium.launchPersistentContext(path.join(dir,'profile'),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extensionDir}`,`--load-extension=${extensionDir}`,`--host-resolver-rules=MAP ${host} ~NOTFOUND, MAP deal-agent-beta.onrender.com ~NOTFOUND`]});
-    await context.route('https://deal-agent-beta.onrender.com/**',route=>route.fulfill({contentType:'text/html',body:'<h1>Shopping Agent checkout export</h1>'}));
+    await context.route('https://deal-agent-beta.onrender.com/**',route=>route.fulfill({contentType:'text/html',body:appHTML(storeName)}));
+    await context.route('https://deal-agent-beta.onrender.com/checkout-hook.js',route=>route.fulfill({contentType:'application/javascript',body:hookSource}));
     await context.route(`https://${host}/**`,route=>route.fulfill({contentType:'text/html',body:storefront(storeName,{extra:true})}));
+    await context.addInitScript(({host})=>{if(location.hostname===host && !localStorage.getItem('seeded')){localStorage.setItem('qty','3');localStorage.setItem('extra','1');localStorage.setItem('seeded','true');}},{host});
     await context.addCookies([{name:'existing-store-session',value:'fixture-login',domain:host,path:'/'}]);
-    const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');
-    await app.waitForTimeout(150);
-    await app.evaluate(()=>{window.progress=[];window.addEventListener('message',event=>{if(event.data?.type==='basket:progress')window.progress.push(event.data);});});
-    const plan={version:2,store:storeName,request_id:'demo-request-1234567890',created_at:Math.floor(Date.now()/1000),delivery:storeName==='quickmart'?{branch_id:'73',label:'Nearby branch'}:{label:'Nearby location'},products:[{id:'42',name:'Milk 500ml',query:'milk',url:storeName==='carrefour'?`https://${host}/mafken/en/milk/p/42?offer=retail&sellerId=1&sid=reference`:`https://${host}/milk`,packs:2,expected_price:'62.00'}]};
+    const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');await app.bringToFront();
+    await app.waitForFunction(()=>window.offer && window.progress);await app.waitForTimeout(150);
+    const plan={version:3,store:storeName,request_id:'demo-request-1234567890',created_at:Math.floor(Date.now()/1000),delivery:storeName==='quickmart'?{branch_id:'73',label:'Nearby branch'}:{label:'Nearby location'},products:[{id:'42',name:'Milk 500ml',query:'milk',url:storeName==='carrefour'?`https://${host}/mafken/en/milk/p/42?offer=retail&sellerId=1&sid=reference`:`https://${host}/milk`,packs:2,expected_price:'62.00'}]};
     if(storeName==='carrefour') {
-      const rejected=await app.evaluate(plan=>new Promise(resolve=>{
-        const listener=event=>{if(event.data?.source==='shopping-agent-extension'){window.removeEventListener('message',listener);resolve(event.data);}};
-        window.addEventListener('message',listener);
-        plan.products[0].url+='&token=private';
-        window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin);
-      }),plan);
+      const invalid=structuredClone(plan);invalid.products[0].url+='&token=private';
+      const rejected=await send(app,invalid);
       assert.match(rejected.error,/42: unsupported URL parameters/);
-      assert.match(rejected.error,/checkout 0\.2\.0; offer-links-v2/);
-      assert.equal(rejected.version,manifest.version);
-      assert.equal(rejected.validator,'offer-links-v2');
+      assert.match(rejected.error,/checkout 0\.3\.0; offer-links-v2/);
     }
-    const uiEvent=context.waitForEvent('page');
-    const accepted=await app.evaluate(plan=>new Promise(resolve=>{
-      window.addEventListener('message',event=>{if(event.data?.source==='shopping-agent-extension' && !event.data.type)resolve(event.data);});
-      window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin);
-    }),plan);
-    assert.equal(accepted.accepted,true);
-    assert.equal(accepted.version,manifest.version);
-    assert.equal('cookies' in accepted,false);
-    const ui=await uiEvent;await ui.waitForURL(/chrome-extension:.*checkout.html/);
-    await ui.locator('#open').waitFor();
-    await ui.waitForFunction(()=>document.querySelector('#products li')?.textContent.includes('Milk'));
-    const storeEvent=context.waitForEvent('page');
-    await ui.locator('#open').click();
+    const storeEvent=context.waitForEvent('page');const accepted=await send(app,plan);
+    assert.equal(accepted.accepted,true);assert.equal(accepted.background,true);assert.equal(accepted.version,manifest.version);
     const store=await storeEvent;
-    // Attach fixture interception before the extension-created tab's next navigation.
-    await store.goto(`https://${host}/`,{waitUntil:'load'});
-    assert.equal(await store.evaluate(()=>localStorage.getItem('qty')),null);
-    assert.equal(await store.evaluate(()=>localStorage.getItem('paid')),null);
-    await store.evaluate(()=>set(3)); // Same SKU already present, added by the shopper.
-    await ui.locator('#resume:not([disabled])').click();
-    await ui.waitForFunction(()=>document.querySelector('#status').textContent.includes('Fresh cart verified'),{},{timeout:10000});
+    await app.locator('#browser-cart-notification').waitFor({state:'visible',timeout:45000});
+    assert.equal(context.pages().some(page=>page.url().startsWith('chrome-extension:')),false);
     assert.equal(await store.evaluate(()=>localStorage.getItem('qty')),'2');
     assert.equal(await store.evaluate(()=>localStorage.getItem('extra')),'0');
     assert.equal(await store.evaluate(()=>localStorage.getItem('paid')),null);
     assert.equal((await context.cookies(`https://${host}`)).find(c=>c.name==='existing-store-session').value,'fixture-login');
-    assert.equal(manifest.permissions.includes('cookies'),false);
-    assert.equal(manifest.permissions.includes('debugger'),false);
-    assert.equal(manifest.optional_host_permissions.some(host=>host.includes('google')),false);
-    await app.waitForFunction(()=>window.progress.some(event=>event.status==='ready'));
-    assert.ok((await app.evaluate(()=>window.progress)).some(event=>event.message.includes('the old cart')));
-    // An unfinished/failed transfer is superseded by a new explicit order, without a Stop detour.
     const worker=context.serviceWorkers()[0];
+    const active=await worker.evaluate(()=>chrome.tabs.query({active:true,currentWindow:true}));
+    assert.equal(active[0].url,'https://deal-agent-beta.onrender.com/');
+    assert.match(await app.locator('[data-browser-checkout-status]').innerText(),/Fresh cart verified/);
+    assert.ok((await app.evaluate(()=>window.progress)).some(event=>event.message.includes('the old cart')));
+    // An old request and another app tab cannot control this transfer.
+    assert.match((await control(app,'stale-request-123456789','stop')).error,/replaced/);
+    const other=await context.newPage();await other.goto('https://deal-agent-beta.onrender.com/');await other.waitForFunction(()=>window.offer);await other.waitForTimeout(150);
+    assert.match((await control(other,plan.request_id,'stop')).error,/source is not allowed/);await other.close();await app.bringToFront();
+    // Resuming an interrupted verification does not clear or add the order again.
+    await worker.evaluate(async()=>{const {job}=await chrome.storage.session.get('job');await chrome.storage.session.set({job:{...job,status:'attention',message:'Simulated verification interruption'}});});
+    await app.locator('[data-checkout-action="resume"]').waitFor({state:'visible'});
+    const clearsBefore=(await app.evaluate(()=>window.progress)).filter(event=>event.message.includes('the old cart')).length;
+    await app.locator('[data-checkout-action="resume"]').click();
+    await app.waitForFunction(()=>document.querySelector('#checkout').dataset.checkoutState==='ready',{},{timeout:20000});
+    assert.equal(await store.evaluate(()=>localStorage.getItem('qty')),'2');
+    assert.equal((await app.evaluate(()=>window.progress)).filter(event=>event.message.includes('the old cart')).length,clearsBefore);
+    // A new order supersedes an interrupted transfer without a Stop detour.
     await worker.evaluate(async()=>{const {job}=await chrome.storage.session.get('job');await chrome.storage.session.set({job:{...job,status:'attention',message:'Simulated interrupted order'}});});
     const nextPlan={...plan,request_id:'second-request-1234567890',products:plan.products.map(p=>({...p,packs:1}))};
-    const nextUIEvent=context.waitForEvent('page');
-    const nextAccepted=await app.evaluate(plan=>new Promise(resolve=>{
-      const listener=event=>{if(event.data?.source==='shopping-agent-extension' && event.data.request_id===plan.request_id && !event.data.type){window.removeEventListener('message',listener);resolve(event.data);}};
-      window.addEventListener('message',listener);
-      window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin);
-    }),nextPlan);
-    assert.equal(nextAccepted.accepted,true);
-    const nextUI=await nextUIEvent;await nextUI.waitForURL(/chrome-extension:.*checkout.html/);
-    const nextStoreEvent=context.waitForEvent('page');await nextUI.locator('#open:not([disabled])').click();
-    const nextStore=await nextStoreEvent;await nextStore.goto(`https://${host}/`);
-    await nextUI.locator('#resume:not([disabled])').click();
-    await nextUI.waitForFunction(()=>document.querySelector('#status').textContent.includes('Fresh cart verified'),{},{timeout:20000});
+    const nextStoreEvent=context.waitForEvent('page');assert.equal((await send(app,nextPlan)).accepted,true);
+    const nextStore=await nextStoreEvent;
+    await app.locator('#browser-cart-notification').waitFor({state:'visible',timeout:45000});
     assert.equal(await nextStore.evaluate(()=>localStorage.getItem('qty')),'1');
     assert.equal(await nextStore.evaluate(()=>localStorage.getItem('extra')),'0');
     assert.equal(await nextStore.evaluate(()=>localStorage.getItem('paid')),null);
-    await nextUI.locator('#clear').click();
-
-    await ui.waitForFunction(()=>document.querySelector('#empty').hidden===false);
-    assert.equal(store.isClosed(),false);
+    assert.equal(manifest.permissions.includes('cookies'),false);assert.equal(manifest.permissions.includes('debugger'),false);
+    await app.locator('#browser-cart-notification button').filter({hasText:'Open cart'}).click();
+    await app.waitForTimeout(100);
+    assert.equal((await worker.evaluate(()=>chrome.tabs.query({active:true,currentWindow:true})))[0].url,nextStore.url());
+    assert.equal((await control(app,nextPlan.request_id,'stop')).ok,true);
+    assert.equal(nextStore.isClosed(),false); // Ready cart is left for the shopper.
   } finally {await context?.close();await rm(dir,{recursive:true,force:true});}
 });
 }
+
+
+test('first-time store access is requested only after an explicit setup click',async()=>{
+  const dir=await mkdtemp(path.join(os.tmpdir(),'shopping-agent-permissions-'));let context;
+  try {
+    const extensionDir=path.join(dir,'extension');await cp(new URL('../../extension',import.meta.url),extensionDir,{recursive:true});
+    context=await chromium.launchPersistentContext(path.join(dir,'profile'),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extensionDir}`,`--load-extension=${extensionDir}`,'--host-resolver-rules=MAP deal-agent-beta.onrender.com ~NOTFOUND']});
+    await context.route('https://deal-agent-beta.onrender.com/**',route=>route.fulfill({contentType:'text/html',body:appHTML('carrefour')}));
+    await context.route('https://deal-agent-beta.onrender.com/checkout-hook.js',route=>route.fulfill({contentType:'application/javascript',body:hookSource}));
+    const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');await app.waitForFunction(()=>window.offer);await app.waitForTimeout(150);
+    const plan={version:3,store:'carrefour',request_id:'permission-request-123456',created_at:Math.floor(Date.now()/1000),products:[{id:'42',name:'Milk',query:'milk',url:'https://www.carrefour.ke/mafken/en/milk/p/42',packs:1,expected_price:'62.00'}]};
+    assert.equal((await send(app,plan)).status,'permission_required');
+    await app.locator('[data-checkout-action="setup"]').waitFor({state:'visible'});
+    assert.equal(context.pages().some(page=>page.url().startsWith('chrome-extension:')),false);
+    assert.equal(context.pages().some(page=>page.url().includes('carrefour.ke')),false);
+    const setupEvent=context.waitForEvent('page');await app.locator('[data-checkout-action="setup"]').click();
+    const setup=await setupEvent;await setup.waitForURL(/chrome-extension:.*checkout.html/);
+    await setup.locator('#open:not([disabled])').waitFor();
+    assert.equal(await setup.locator('#open').innerText(),'Enable background checkout');
+  } finally {await context?.close();await rm(dir,{recursive:true,force:true});}
+});

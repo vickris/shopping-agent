@@ -12,13 +12,14 @@ const basePlan=()=>({version:1,request_id:'test-request-id-123456',created_at:Ma
 test('basket validation restricts origins, products, quantities, expiry and payload size',()=>{
   assert.equal(validatePlan(basePlan()).products.length,1);
   assert.equal(validatePlan({...basePlan(),version:2}).version,2);
+  assert.equal(validatePlan({...basePlan(),version:3}).version,3);
   const offerPlan=basePlan();offerPlan.products[0].url+='?offer=retail&sellerId=1&sid=store#details';
   const offered=validatePlan(offerPlan).products[0].url;
   assert.ok(offered.includes('sellerId=1'));assert.ok(offered.includes('offer=retail'));assert.equal(new URL(offered).hash,'');
   assert.equal(appOrigin('https://deal-agent-beta.onrender.com/'),true);
   assert.equal(appOrigin('https://evil.test'),false);
   assert.equal(storeURL('https://www.quickmart.co.ke/milk','carrefour'),false);
-  for(const change of [{created_at:1},{created_at:Math.floor(Date.now()/1000)+10000},{store:'other'},{version:3},{extra:'x'.repeat(65536)}])assert.throws(()=>validatePlan({...basePlan(),...change}));
+  for(const change of [{created_at:1},{created_at:Math.floor(Date.now()/1000)+10000},{store:'other'},{version:4},{extra:'x'.repeat(65536)}])assert.throws(()=>validatePlan({...basePlan(),...change}));
   for(const change of [{url:'https://evil.test/p/42'},{url:'https://www.carrefour.ke/mafken/en/milk/p/42?token=secret'},{packs:0},{packs:51},{expected_price:'NaN'},{url:'https://user:pass@www.carrefour.ke/p/42'}]){
     const plan=basePlan();Object.assign(plan.products[0],change);assert.throws(()=>validatePlan(plan));
   }
@@ -104,7 +105,7 @@ test('app checkout status displays extension progress and actionable errors',asy
   globalThis.location={origin:'http://localhost:4000'};
   globalThis.window={addEventListener:(_type,fn)=>{listener=fn;},removeEventListener(){},postMessage(){}};
   const status={textContent:''};
-  const hook={el:{dataset:{store:'carrefour'},querySelector:()=>status},handleEvent:(_event,fn)=>{offer=fn;}};
+  const hook={el:{dataset:{store:'carrefour'},querySelector:()=>status,querySelectorAll:()=>[],addEventListener(){},removeEventListener(){}},handleEvent:(_event,fn)=>{offer=fn;}};
   try {
     BrowserCheckout.mounted.call(hook);offer({plan:{store:'carrefour',request_id:'progress-test'}});
     listener({source:window,origin:location.origin,data:{source:'shopping-agent-extension',type:'basket:progress',request_id:'progress-test',message:'Carrefour currently allows only 2 packs; you selected 3.'}});
@@ -116,5 +117,8 @@ test('app checkout status displays extension progress and actionable errors',asy
     assert.match(status.textContent,/version 0.2.0 or newer/);
     listener({source:window,origin:location.origin,data:{source:'shopping-agent-extension',request_id:'fresh-order',version:'0.2.0',type:'basket:progress',message:'Fresh cart verified'}});
     assert.equal(status.textContent,'Fresh cart verified');
+    offer({plan:{version:3,store:'carrefour',request_id:'background-order'}});
+    listener({source:window,origin:location.origin,data:{source:'shopping-agent-extension',request_id:'background-order',version:'0.2.0',error:'Invalid or expired basket.'}});
+    assert.match(status.textContent,/version 0.3.0 or newer/);
   } finally {BrowserCheckout.destroyed.call(hook);globalThis.window=previousWindow;globalThis.location=previousLocation;}
 });

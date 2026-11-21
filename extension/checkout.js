@@ -2,7 +2,7 @@ import {STORES,permissionsFor} from './policy.js';
 const $=id=>document.getElementById(id);
 let job;
 async function send(type,extra={}) {
-  const result=await chrome.runtime.sendMessage({type,...extra});
+  const result=await chrome.runtime.sendMessage({type,request_id:job?.plan.request_id,...extra});
   if(result.error)throw Error(result.error);return result;
 }
 async function refresh() {
@@ -19,6 +19,7 @@ async function refresh() {
     li.append(name,detail);return li;
   }));
   $('open').disabled=Boolean(job.tabId);
+  $('open').textContent='Enable background checkout';
   $('resume').disabled=!job.tabId || !['awaiting_user','attention'].includes(job.status);
   $('focus').disabled=!job.tabId;
 }

@@ -31,11 +31,11 @@ defmodule DealAgentWeb.BrowserCheckoutTest do
     assert has_element?(view, "#carrefour-browser-checkout a[download]")
 
     view
-    |> element("button.shop-now[phx-value-store='carrefour']", "Checkout in my browser")
+    |> element("button.shop-now[phx-value-store='carrefour']", "Prepare cart")
     |> render_click()
 
     assert_push_event(view, "browser-basket", %{
-      plan: %{version: 2, store: "carrefour", products: [%{id: "milk-1", packs: 2}]}
+      plan: %{version: 3, store: "carrefour", products: [%{id: "milk-1", packs: 2}]}
     })
 
     refute has_element?(view, "#carrefour-cart-status")

@@ -2,8 +2,8 @@
 <header><span aria-hidden="true">🛒</span> Shopping Agent <small>Browser checkout</small></header>
 <main><h1 id="heading">Your basket, in your browser</h1><p>Sign in and pay directly on the supermarket website. The extension never reads your password, cookies or payment details.</p>
 <p id="status" role="status"></p><section id="basket" hidden><p id="branch"></p><ul id="products"></ul>
-<p class="notice">Each new order replaces the entire supermarket cart, including items you added directly on its website. Sign in and confirm the delivery address first, then choose “Replace cart &amp; build this order”. The extension checks selected prices, empties the old cart, adds this order and verifies its contents. If a price, stock limit or store control prevents this, it stops and shows the reason. You review the final total and pay yourself.</p>
-<div class="actions"><button id="open">1. Open supermarket &amp; sign in</button><button id="resume">2. Replace cart &amp; build this order</button><button id="focus">View supermarket tab</button><button id="clear">Stop transfer</button></div>
+<p class="notice">Each new order replaces the entire supermarket cart, including items you added directly on its website. Click Prepare cart on Shopping Agent to run preparation in the background. If sign-in or a delivery address is needed, open the store from the shopping page, then resume there. The extension checks selected prices, empties the old cart, adds this order and verifies its contents. If a price, stock limit or store control prevents this, it stops and shows the reason. You review the final total and pay yourself.</p>
+<div class="actions"><button id="open">Enable background checkout</button><button id="resume">Resume preparation</button><button id="focus">View supermarket tab</button><button id="clear">Stop transfer</button></div>
 <p>Keep the helper supermarket tab open during transfer. Stopping an active transfer closes that helper tab but does not delete its cart. Basket instructions expire after 30 minutes. Sending a new order stops the previous transfer.</p></section>
-<p id="empty">Select products in Shopping Agent, then choose “Checkout in my browser”.</p>
+<p id="empty">Select products in Shopping Agent, then choose “Prepare cart”.</p>
 </main><script type="module" src="checkout.js"></script></body></html>
