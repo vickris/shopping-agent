@@ -7,7 +7,7 @@ import {createRequire} from 'node:module';
 const require=createRequire(new URL('../../priv/carrefour_browser/package.json',import.meta.url));
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 const {chromium}=require('playwright');
-const {storefront}=await import('./fixtures.mjs');
+const {storefront,naivasReact}=await import('./fixtures.mjs');
 const hookSource=await readFile(new URL('../../assets/js/browser_checkout.js',import.meta.url),'utf8');
 const appHTML=store=>`<h1>Shopping Agent</h1><section id="checkout" data-store="${store}"><p data-browser-checkout-status role="status"></p><button data-checkout-action="setup" hidden>Enable access</button><button data-checkout-action="focus" hidden>Open store</button><button data-checkout-action="resume" hidden>Resume</button><button data-checkout-action="stop" hidden>Stop</button></section><script type="module">import {BrowserCheckout} from '/checkout-hook.js';const hook={el:document.querySelector('#checkout'),handleEvent:(_event,fn)=>{window.offer=plan=>fn({plan});}};BrowserCheckout.mounted.call(hook);window.progress=[];window.addEventListener('message',event=>{if(event.data?.type==='basket:progress')window.progress.push(event.data);});</script>`;
 const send=async(app,plan)=>app.evaluate(plan=>new Promise(resolve=>{
@@ -19,8 +19,9 @@ const control=async(app,request_id,action)=>app.evaluate(({request_id,action})=>
   window.addEventListener('message',listener);window.postMessage({source:'shopping-agent',type:'basket:control',request_id,action},location.origin);
 }),{request_id,action});
 
-for(const storeName of ['carrefour','quickmart','naivas']) {
-test(`${storeName}: prepares two fresh carts in the background and notifies the shopping page`,async()=>{
+for(const layout of ['carrefour','quickmart','naivas','naivas-react']) {
+const storeName=layout==='naivas-react'?'naivas':layout;
+test(`${layout}: prepares two fresh carts in the background and notifies the shopping page`,async()=>{
   const host={carrefour:'www.carrefour.ke',quickmart:'www.quickmart.co.ke',naivas:'www.naivas.online'}[storeName];
   const dir=await mkdtemp(path.join(os.tmpdir(),'shopping-agent-extension-'));
   let context;
@@ -33,7 +34,7 @@ test(`${storeName}: prepares two fresh carts in the background and notifies the 
     await context.route('https://deal-agent-beta.onrender.com/**',route=>route.fulfill({contentType:'text/html',body:appHTML(storeName)}));
     await context.route('https://deal-agent-beta.onrender.com/checkout-hook.js',route=>route.fulfill({contentType:'application/javascript',body:hookSource}));
     const retailerRequests=[];
-    await context.route(`https://${host}/**`,route=>{retailerRequests.push(route.request().url());return route.fulfill({contentType:'text/html',body:storefront(storeName,{extra:true})});});
+    await context.route(`https://${host}/**`,route=>{retailerRequests.push(route.request().url());return route.fulfill({contentType:'text/html',body:layout==='naivas-react'?naivasReact():storefront(storeName,{extra:true})});});
     await context.addInitScript(({host})=>{if(location.hostname===host && !localStorage.getItem('seeded')){localStorage.setItem('qty','3');localStorage.setItem('extra','1');localStorage.setItem('seeded','true');}},{host});
     await context.addCookies([{name:'existing-store-session',value:'fixture-login',domain:host,path:'/'}]);
     const app=await context.newPage();await app.goto('https://deal-agent-beta.onrender.com/');await app.bringToFront();

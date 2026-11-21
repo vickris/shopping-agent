@@ -21,3 +21,10 @@ test('timeouts retain the operation stage',()=>{
   assert.equal(failure.error,'location_timeout');
   assert.match(failure.message,/did not finish saving/);
 });
+
+test('Naivas address form is unconfirmed rather than a delivery exclusion',()=>{
+  const result=locationFailure('naivas',Error('address_details_required'));
+  assert.equal(result.error,'address_details_required');
+  assert.match(result.message,/full delivery address and contact details/);
+  assert.doesNotMatch(result.message,/does not deliver|could not find a store/i);
+});

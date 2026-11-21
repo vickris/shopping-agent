@@ -18,6 +18,73 @@ export async function cartStep({store,product,products,phase,branch,readonly=fal
   if(globalThis.__shoppingAgentCartBusy)return {error:'A store step is still running. Wait before resuming.'};
   globalThis.__shoppingAgentCartBusy=true;
   try {
+    const modernLocation=store==='naivas' && all('button[data-slot="dropdown-menu-trigger"]').find(el=>visible(el)&&el.querySelector('span.truncate'));
+    if(modernLocation) {
+      const label=text(modernLocation);
+      if(phase==='probe') {
+        if(!label || /^Nairobi,?\s*Kenya$|select.*address|your address/i.test(label))throw issue('Select your delivery address on Naivas, then resume preparation here.');
+        return {ok:true,layout:'react'};
+      }
+      const sheet=()=>all('[role="dialog"][data-slot="sheet-content"]').find(el=>visible(el)&&/Shopping Cart/i.test(text(el)));
+      const cartButton=()=>all('button[data-slot="button"]').find(el=>visible(el)&&!el.closest('main,[role="dialog"]')&&/^\d+$/.test(text(el))&&el.querySelector('svg'));
+      const openCart=async()=>{if(!sheet())click(cartButton());await wait(sheet);return sheet();};
+      const closeCart=async()=>{if(sheet())click(sheet().querySelector('button[data-slot="sheet-close"]'));await wait(()=>!sheet());};
+      const rows=()=>sheet()?[...new Set(all('button[aria-label="Open quantity selection modal"]',sheet()).filter(visible).map(counter=>{
+        let row=counter.parentElement;
+        while(row && row!==sheet() && (!row.querySelector('img[src*="/product/"]') || !row.querySelector('p.truncate')))row=row.parentElement;
+        return row && row!==sheet()?row:null;
+      }).filter(Boolean))]:[];
+      const rowId=row=>row?.querySelector('img[src*="/product/"]')?.getAttribute('src').match(/\/product\/(\d+)\//)?.[1];
+      const rowFor=p=>rows().find(row=>rowId(row)===p.id);
+      const quantity=row=>{const value=text(row?.querySelector('button[aria-label="Open quantity selection modal"]'));return /^\d+$/.test(value)?Number(value):NaN;};
+      const rowPrice=row=>priceText(all('p',row).find(el=>/^KES\s/i.test(text(el))));
+      const empty=()=>sheet() && /Your cart is empty/i.test(text(sheet())) && rows().length===0;
+      if(phase==='clear') {
+        await openCart();
+        await wait(()=>rows().length || empty());
+        if(empty())return {ok:true};
+        click(all('button[data-slot="button"]',sheet()).find(el=>visible(el)&&text(el)==='Clear Cart'));
+        const confirmation=await wait(()=>all('[role="dialog"]').find(el=>visible(el)&&all('button',el).some(button=>text(button)==='Yes, clear cart')));
+        click(all('button',confirmation).find(el=>text(el)==='Yes, clear cart'));
+        await wait(empty);return {ok:true};
+      }
+      if(phase==='items') {
+        if(path(location.href)!==path(product.url))throw issue('Naivas redirected to a different product.');
+        const heading=await wait(()=>document.querySelector('main h1'));
+        if(text(heading).toLowerCase().replace(/\s+/g,' ')!==product.name.toLowerCase().replace(/\s+/g,' '))throw issue('Naivas returned a different product name.');
+        await wait(()=>all('main img[src*="/product/"]').some(img=>img.getAttribute('src').includes('/product/'+product.id+'/')));
+        checkPrice(priceText(heading.parentElement.querySelector('div.font-semibold')),product);
+        await openCart();await wait(()=>rows().length || empty());
+        if(!rowFor(product)) {
+          await closeCart();const before=Number(text(cartButton()));
+          click(all('main button').find(el=>visible(el)&&/^Add to Cart$/i.test(text(el))));
+          await wait(()=>Number(text(cartButton()))>before);
+          await openCart();await wait(()=>rowFor(product));
+        }
+        for(let attempt=0;attempt<50;attempt++) {
+          const row=await wait(()=>rowFor(product));const qty=quantity(row);
+          if(!Number.isInteger(qty)||qty<1)throw issue('Could not read the Naivas cart quantity.');
+          checkPrice(rowPrice(row),product);
+          if(qty===product.packs)return {ok:true};
+          const plus=qty<product.packs;
+          click(row.querySelector(`button[aria-label="${plus?'Increase':'Decrease'} quantity"]`));
+          await wait(()=>quantity(rowFor(product))===qty+(plus?1:-1));
+        }
+        throw issue('Naivas quantity limit reached.');
+      }
+      if(phase==='verify') {
+        await openCart();await wait(()=>rows().length || empty());
+        const actual=rows();
+        if(exact && (actual.length!==products.length || new Set(actual.map(rowId)).size!==products.length || actual.some(row=>!products.some(p=>p.id===rowId(row)))))throw issue('Naivas cart contains missing or extra products.');
+        for(const p of products) {
+          const row=rowFor(p);
+          if(!row || quantity(row)!==p.packs)throw issue('Naivas cart quantity does not match your selection.');
+          checkPrice(rowPrice(row),p);
+        }
+        return {ok:true};
+      }
+      throw issue('Unsupported Naivas cart step.');
+    }
     if(phase==='probe') {
       if(store==='quickmart') {
         const address=await wait(()=>all('.js-location-address').find(el=>visible(el)&&text(el)&&!/enter your delivery address/i.test(text(el)))).catch(()=>{throw issue('Set your delivery address on Quickmart, then resume preparation here.');});

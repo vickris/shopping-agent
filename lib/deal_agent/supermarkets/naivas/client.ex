@@ -3,7 +3,7 @@ defmodule DealAgent.Supermarkets.Naivas.Client do
   alias DealAgent.Supermarkets.Naivas.ResponseParser
 
   def search_url(query),
-    do: "https://www.naivas.online/search?" <> URI.encode_query(%{"term" => String.trim(query)})
+    do: "https://www.naivas.online/search?" <> URI.encode_query(%{"q" => String.trim(query)})
 
   def search(query, opts \\ [])
 

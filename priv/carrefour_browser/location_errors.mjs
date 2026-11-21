@@ -15,6 +15,7 @@ const phases={
 export const locationProgress=stage=>phases[stage]||phases.opening_location;
 export function locationFailure(store,error) {
   const stage=Object.hasOwn(phases,error.locationStage)?error.locationStage:'opening_location';
+  if(store==='naivas' && error.message==='address_details_required')return {stage,error:'address_details_required',message:'Naivas requires a full delivery address and contact details before confirming this location. You can still compare general catalogue prices; finish address setup on Naivas before checkout.'};
   const messages={
     loading_store:'could not load its website',
     opening_location:'could not open its location selector',

@@ -1,3 +1,4 @@
+import {waitForNaivasSearch} from './naivas_storefront.mjs';
 // One temporary guest session per shopper/store. State never leaves this process.
 import readline from 'node:readline';
 import {remoteCheckout} from './remote_checkout.mjs';
@@ -86,7 +87,7 @@ async function locateAutomatically(reload=false) {
     try {
       if(attempt || reload) {
         emit({type:'setup',status:'opening',stage:'loading_store',message:locationProgress('loading_store')});
-        try {await navigate(setup.store==='carrefour'?roots.carrefour+'/search?keyword=milk':setup.store==='quickmart'?roots.quickmart+'shops/products/1/keyword-milk':setup.store==='foodplus'?roots.foodplus+'catalogsearch/result/?q=milk':roots.naivas+'search?term=milk');}
+        try {await navigate(setup.store==='carrefour'?roots.carrefour+'/search?keyword=milk':setup.store==='quickmart'?roots.quickmart+'shops/products/1/keyword-milk':setup.store==='foodplus'?roots.foodplus+'catalogsearch/result/?q=milk':roots.naivas+'search?q=milk');}
         catch(error){error.locationStage='loading_store';throw error;}
       }
       const {confirmation,...identity}=await selectAutomaticLocation(page,setup.store,setup.coordinates,navigate,stage=>emit({type:'setup',status:'opening',stage,message:locationProgress(stage)}));
@@ -96,6 +97,7 @@ async function locateAutomatically(reload=false) {
     } catch(error) {
       failure=locationFailure(setup.store,error);
       if(onError)await onError(error);
+      if(error.message==='address_details_required')break;
     }
   }
   emit({type:'setup',status:'unavailable',...failure});
@@ -154,10 +156,11 @@ input.on('line',async line=>{
       await assertLocation();
       const url=setup.store==='quickmart'
         ? 'https://www.quickmart.co.ke/shops/products/'+confirmed.branch_id+'/keyword-'+encodeURIComponent(message.query)
-        : roots[setup.store]+(setup.store==='foodplus'?'catalogsearch/result/?q=':setup.store==='naivas'?'search?term=':'/search?keyword=')+encodeURIComponent(message.query);
+        : roots[setup.store]+(setup.store==='foodplus'?'catalogsearch/result/?q=':setup.store==='naivas'?'search?q=':'/search?keyword=')+encodeURIComponent(message.query);
       await navigate(url);
       await assertLocation();
-      await page.locator(setup.store==='quickmart'
+      if(setup.store==='naivas')await waitForNaivasSearch(page);
+      else await page.locator(setup.store==='quickmart'
         ? '#products-listing .productInfoJs, #frmProductSearchPaging input[name="recordDisplayCount"][value="0"]'
         : setup.store==='naivas' ? 'div.border-naivas-bg a span.line-clamp-2, h2:has-text("0 Search Results Found")'
         : setup.store==='foodplus' ? '.products-grid li.product-item, .message.notice:has-text("Your search returned no results")'
@@ -208,7 +211,7 @@ try {
   page=await context.newPage();
   if(point)emit({type:'setup',status:'opening',stage:'loading_store',message:locationProgress('loading_store')});
   for(let attempt=0;attempt<2;attempt++) {
-    try {await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : setup.store==='foodplus'?roots.foodplus+'catalogsearch/result/?q=milk':roots.naivas+'search?term=milk');break;}
+    try {await navigate(setup.store==='carrefour' ? roots.carrefour+'/search?keyword=milk' : setup.store==='quickmart' ? roots.quickmart+'shops/products/1/keyword-milk' : setup.store==='foodplus'?roots.foodplus+'catalogsearch/result/?q=milk':roots.naivas+'search?q=milk');break;}
     catch(error){if(attempt===1){error.locationStage='loading_store';throw error;}}
   }
   try { initialIdentity=await identity(true); } catch {}

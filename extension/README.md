@@ -1,4 +1,4 @@
-# Shopping Agent browser checkout 0.3.2 (desktop Chrome / Edge)
+# Shopping Agent browser checkout 0.4.0 (desktop Chrome / Edge)
 
 This is a demo extension, not a Chrome Web Store publication. Install it once per
 shopper's desktop browser. It does not work in mobile Chrome.
@@ -60,28 +60,30 @@ eligibility must be reviewed before payment. Automated fixture tests exercise
 fresh-cart replacement in all three stores; real-store behavior can still vary.
 
 For an update, replace all files in the original unpacked extension folder and
-click Reload on its chrome://extensions card. Check version 0.3.2; do not install
+click Reload on its chrome://extensions card. Check version 0.4.0; do not install
 a second copy. Refresh Shopping Agent and send a new order after updating.
 The updated app sends protocol version 3 so older extensions reject fresh-cart
-orders instead of retaining the old manual review flow. Version 0.3.2 also accepts
+orders instead of retaining the old manual review flow. Version 0.4.0 also accepts
 versions 1 and 2 from previously deployed apps while you roll out the update.
 Carrefour offer/seller parameters are preserved in product links;
 credential/redirect query parameters remain unsupported. General-catalogue
 comparisons require confirming delivery and current prices in the store.
 
 Checkout errors include the background worker version and validator revision.
-Version 0.3.2 reports `offer-links-v2`; an unknown validator can indicate mixed
+Version 0.4.0 reports `offer-links-v2`; an unknown validator can indicate mixed
 extension files. The reported Carrefour milk (81030) and water (17396) offer links
 are regression-tested together.
 
-Version 0.3.2 keeps stage messages accurate between navigations. An inactive
+Version 0.4.0 keeps stage messages accurate between navigations. An inactive
 cart tab from the previous transfer is reused in the same browser window;
 active tabs, payment/checkout pages and unrelated store tabs are left alone.
 The Del Monte (38605) and toothpaste (120137) two-product regression checks
 that every old line is removed before either product is added, and that only
 one ready event is sent after both products have been verified.
 
-The current Naivas React layout is detected as unsupported before any cart
-changes. Its earlier Livewire adapter remains covered by fixtures, but the new
-site needs a separate adapter update. Quickmart product details use the direct
-product form and enforce its seller branch, without a keyword search.
+Naivas supports the current React cart drawer as well as the earlier Livewire
+layout. The React adapter verifies product image IDs, unit prices and quantities,
+clears the drawer with the store confirmation, and verifies the final basket.
+Naivas requires a saved delivery address; its default “Nairobi, Kenya” label is
+not treated as confirmation. Complete its address/contact form once, then resume.
+Quickmart uses the direct product form and enforces its seller branch.

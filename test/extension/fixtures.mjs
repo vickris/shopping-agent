@@ -40,3 +40,14 @@ export function carrefourOrderFixture(currentId) {
   const rows=items.map(item=>`<div data-row="${item.id}" data-price="${item.price}"><a href="/mafken/en/p/${item.id}">${item.name}</a><div data-testid="expanded-widget"><button aria-label="Decrease quantity" onclick="set('${item.id}',basket['${item.id}']-1)">-</button><span data-cart-counter></span><button aria-label="Increase quantity" onclick="set('${item.id}',basket['${item.id}']+1)">+</button></div><div class="items-baseline">KES <span data-total></span>${item.id==='38605'?'<s>299.00</s>':''}</div></div>`).join('');
   return script+`<main>${product}${rows}<p data-empty>Your Cart is Empty!</p></main>`;
 }
+
+export function naivasReact({address='Gateway Mall',price='62.00'}={}) {
+  return `<header><button data-slot="dropdown-menu-trigger"><span class="truncate">${address}</span></button><button data-slot="button" id="cart" onclick="document.querySelector('#sheet').hidden=false"><svg></svg><span id="count">0</span></button></header>
+  <main><div><h1>Milk 500ml</h1><div class="font-semibold">KES ${price}</div></div><img src="https://cdn.test/product/42/milk.jpg"><button onclick="qty=1;render()">Add to Cart</button></main>
+  <div role="dialog" data-slot="sheet-content" id="sheet" hidden><h2>Shopping Cart</h2><button data-slot="sheet-close" onclick="document.querySelector('#sheet').hidden=true">Close</button><button data-slot="button" onclick="document.querySelector('#confirm').hidden=false">Clear Cart</button><div id="rows"></div></div>
+  <div role="dialog" id="confirm" hidden><button onclick="qty=0;extra=false;render();document.querySelector('#confirm').hidden=true">Yes, clear cart</button></div>
+  <button onclick="localStorage.setItem('paid','true')">Checkout and pay</button>
+  <script>let qty=Number(localStorage.getItem("qty")||0),extra=localStorage.getItem("extra")!=="0";
+  function row(id,n){return '<div><img src="https://cdn.test/product/'+id+'/milk.jpg"><div><p class="truncate">Milk 500ml</p><p>KES ${price}</p></div><div><button aria-label="Decrease quantity" onclick="qty--;render()">-</button><button aria-label="Open quantity selection modal">'+n+'</button><button aria-label="Increase quantity" onclick="qty++;render()">+</button></div></div>';}
+  function render(){localStorage.setItem('qty',String(qty));localStorage.setItem('extra',extra?'1':'0');document.querySelector('#count').textContent=qty+(extra?1:0);document.querySelector('#rows').innerHTML=(qty?row('42',qty):'')+(extra?row('99',1):'')+(!qty&&!extra?'<p>Your cart is empty</p>':'');}render();</script>`;
+}

@@ -49,6 +49,36 @@ defmodule DealAgent.Supermarkets.NaivasTest do
     end
   end
 
+  test "React search reads product image IDs, selling prices and stock" do
+    card = """
+    <div class="group"><a href="/milk"><img src="https://cdn.example/product/2989/milk.jpg"></a>
+    <span class="font-bold">KES <span>81</span></span><span class="line-through">KES 100</span>
+    <p class="line-clamp-2">Milk 500Ml</p><button aria-label="Add to cart"></button></div>
+    """
+
+    assert {:ok, [product]} = ResponseParser.parse("<main>169 Result(s)" <> card <> "</main>")
+    assert product.id == "2989"
+    assert product.url == "https://www.naivas.online/milk"
+    assert Decimal.equal?(product.price, "81")
+    assert product.in_stock
+    assert product.source.id_source == :product_image_path
+
+    assert {:ok, [%{in_stock: false}]} =
+             ResponseParser.parse(
+               "<main>1 Result(s)" <>
+                 String.replace(card, "aria-label=", "disabled aria-label=") <> "</main>"
+             )
+
+    assert {:ok, []} = ResponseParser.parse("<main>0 Result(s)</main>")
+    assert {:error, _} = ResponseParser.parse("<main>1 Result(s)</main>")
+
+    assert {:error, _} =
+             ResponseParser.parse(
+               "<main>1 Result(s)" <>
+                 String.replace(card, "/product/2989/", "/unknown/") <> "</main>"
+             )
+  end
+
   test "blank, blocked, invalid cards and homepage recommendations are not empty results" do
     assert {:ok, []} = ResponseParser.parse("<h2>0 Search Results Found</h2>")
 
@@ -62,6 +92,6 @@ defmodule DealAgent.Supermarkets.NaivasTest do
     end
 
     assert Naivas.Client.search_url("milk & cream") ==
-             "https://www.naivas.online/search?term=milk+%26+cream"
+             "https://www.naivas.online/search?q=milk+%26+cream"
   end
 end

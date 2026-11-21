@@ -109,9 +109,10 @@
               end}
             </p>
             <p role="status" aria-live="polite" class="mt-1 text-xs text-gray-600">
-              {if profile.status == "unavailable",
-                do: "Could not find a store that delivers near you.",
-                else: profile.message}
+              {if profile.status == "unavailable" and
+                    Map.get(profile, :location_error) != "address_details_required",
+                  do: "Could not find a store that delivers near you.",
+                  else: profile.message}
             </p>
             <p :if={profile.label} class="mt-1 text-xs text-gray-500">
               Store location: {profile.label}
@@ -623,7 +624,7 @@
                     id="foodplus-checkout-notice"
                     class="mt-2 text-xs text-amber-800"
                   >
-                    Foodplus checkout is unavailable while its website reports maintenance. Prices and selections are available for comparison. Its online shop currently offers The Stop @Rhapta branch; delivery to your address still needs verification.
+                    Foodplus automated checkout is not supported yet. Compare prices here, then complete your purchase on the Foodplus website and confirm delivery to your address.
                   </p>
                   <% cart_job = @cart_jobs[store.id] %>
                   <button

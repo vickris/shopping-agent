@@ -209,7 +209,7 @@ defmodule DealAgentWeb.ShopperLiveTest do
     assert has_element?(view, ".foodplus-selection", "Selected for milk")
     assert has_element?(view, "#foodplus-total", "KES 280.00")
     assert has_element?(view, "#foodplus-total button[phx-click='shop-now'][disabled]")
-    assert has_element?(view, "#foodplus-checkout-notice", "maintenance")
+    assert has_element?(view, "#foodplus-checkout-notice", "not supported yet")
 
     assert render_click(view, "shop-now", %{"store" => "foodplus"}) =~
              "Foodplus checkout is unavailable"

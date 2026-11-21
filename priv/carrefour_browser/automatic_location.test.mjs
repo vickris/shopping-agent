@@ -237,3 +237,18 @@ test('coarse browser locations get a bounded nearby-address tolerance',()=>{
   assert.equal(nearbyRadius({...point,accuracy:1800}),3600);
   assert.equal(nearbyRadius({...point,accuracy:10000}),5000);
 });
+
+test('Naivas React GPS pin opens required details without claiming confirmation',()=>fixture('https://www.naivas.online/',`
+  <button data-slot="dropdown-menu-trigger" onclick="document.querySelector('#select').hidden=false"><span class="truncate">Nairobi, Kenya</span></button>
+  <button id="select" hidden onclick="document.querySelector('#map').hidden=false">Select Address</button>
+  <div role="dialog" id="map" hidden>Select your delivery address
+    <button><div class="truncate" id="address">Your address...</div></button>
+    <button onclick="navigator.geolocation.getCurrentPosition(p=>{window.usedPoint=[p.coords.latitude,p.coords.longitude];document.querySelector('#address').textContent='Gateway Mall';})">Locate Me</button>
+    <button onclick="document.querySelector('#map').hidden=true;document.querySelector('#details').hidden=false">Confirm Location</button>
+  </div>
+  <div role="dialog" id="details" hidden>Delivery Address <input aria-label="Phone number"><button onclick="window.saved=true">Save changes</button></div>
+`,async page=>{
+  await assert.rejects(selectAutomaticLocation(page,'naivas',point),/address_details_required/);
+  assert.deepEqual(await page.evaluate(()=>window.usedPoint),[point.latitude,point.longitude]);
+  assert.equal(await page.evaluate(()=>Boolean(window.saved)),false);
+}));

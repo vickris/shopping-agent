@@ -146,3 +146,27 @@ test('new Naivas layout stops explicitly before clearing or adding',async()=>{
     assert.equal(await page.evaluate(()=>document.body.dataset.changed),undefined);
   } finally {await browser.close();}
 });
+
+test('Naivas React drawer clears previous basket, adds direct product and verifies exact quantities',async()=>{
+  const {naivasReact}=await import('./fixtures.mjs');
+  const browser=await chromium.launch({headless:true,channel:'chromium'});
+  try {
+    const page=await browser.newPage();
+    await page.route('https://www.naivas.online/**',route=>route.fulfill({contentType:'text/html',body:naivasReact()}));
+    await page.goto('https://www.naivas.online/milk');
+    const product={...basePlan().products[0],url:'https://www.naivas.online/milk'};
+    assert.deepEqual(await page.evaluate(cartStep,{store:'naivas',phase:'probe'}),{ok:true,layout:'react'});
+    assert.match((await page.evaluate(cartStep,{store:'naivas',phase:'verify',products:[product],exact:true})).error,/missing or extra/);
+    assert.equal((await page.evaluate(cartStep,{store:'naivas',phase:'clear'})).ok,true);
+    assert.equal((await page.evaluate(cartStep,{store:'naivas',phase:'items',product})).ok,true);
+    assert.equal((await page.evaluate(cartStep,{store:'naivas',phase:'verify',products:[product],exact:true})).ok,true);
+    assert.equal(await page.locator('[aria-label="Open quantity selection modal"]').innerText(),'2');
+    const wrong={...product,expected_price:'99.00'};
+    assert.match((await page.evaluate(cartStep,{store:'naivas',phase:'verify',products:[wrong],exact:true})).error,/price changed/);
+    assert.equal((await page.evaluate(cartStep,{store:'naivas',phase:'clear'})).ok,true);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('paid')),null);
+    await page.route('https://www.naivas.online/**',route=>route.fulfill({contentType:'text/html',body:naivasReact({address:'Nairobi, Kenya'})}));
+    await page.reload();
+    assert.match((await page.evaluate(cartStep,{store:'naivas',phase:'probe'})).error,/Select your delivery address/);
+  } finally {await browser.close();}
+});

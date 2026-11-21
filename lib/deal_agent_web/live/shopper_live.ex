@@ -1004,9 +1004,12 @@ defmodule DealAgentWeb.ShopperLive do
 
             {:noreply, assign(socket, :delivery_sessions, profiles)}
 
-          %{"type" => "setup", "status" => "unavailable", "message" => message} ->
+          %{"type" => "setup", "status" => "unavailable", "message" => message} = event ->
             socket = invalidate_store(socket, store)
-            updated = %{profile | status: "unavailable", message: message}
+
+            updated =
+              %{profile | status: "unavailable", message: message}
+              |> Map.put(:location_error, event["error"])
 
             {:noreply,
              socket

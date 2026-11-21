@@ -1,3 +1,4 @@
+import {waitForNaivasSearch} from './naivas_storefront.mjs';
 // Fetch the public search page in an isolated, temporary browser context.
 // Product interpretation stays in the existing Elixir ResponseParser.
 const query = process.argv[2];
@@ -43,7 +44,7 @@ try {
     ? new URL("https://www.quickmart.co.ke/shops/products/1/keyword-" + encodeURIComponent(query.trim()))
     : new URL(store === "foodplus" ? "https://foodplus.co.ke/catalogsearch/result/" : store === "naivas" ? "https://www.naivas.online/search" : "https://www.carrefour.ke/mafken/en/search");
   if (store === "foodplus") url.searchParams.set("q", query.trim());
-  if (store === "naivas") url.searchParams.set("term", query.trim());
+  if (store === "naivas") url.searchParams.set("q", query.trim());
   if (store === "carrefour") url.searchParams.set("keyword", query.trim());
   const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 25000 });
   if (!response || !response.ok()) {
@@ -51,9 +52,9 @@ try {
   } else {
     // Wait for real product cards or the explicit empty state. A blank page,
     // a challenge or a timeout must never become an empty search result.
-    await page.locator(store === "quickmart"
+    if(store === "naivas")await waitForNaivasSearch(page);
+    else await page.locator(store === "quickmart"
       ? "#products-listing .productInfoJs, #frmProductSearchPaging input[name='recordDisplayCount'][value='0']"
-      : store === "naivas" ? "div.border-naivas-bg a span.line-clamp-2, h2:has-text('0 Search Results Found')"
       : store === "foodplus" ? ".products-grid li.product-item, .message.notice:has-text('Your search returned no results')"
       : "div.group a[href*='/p/'] span.line-clamp-2, img[src*='no-result-found.svg']")
       .first().waitFor({ state: "attached", timeout: 12000 });

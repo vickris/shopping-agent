@@ -17,10 +17,10 @@ const stepMessage=job=>{
   return 'Verifying your completed cart…';
 };
 const isCartTab=(tab,store,windowId)=>tab && !tab.active && (windowId===undefined || tab.windowId===windowId) && storeURL(tab.url,store) &&
-  (store==='quickmart'?(new URL(tab.url).pathname==='/' || new URL(tab.url).pathname.startsWith('/shops/products/')):new URL(tab.url).pathname===new URL(STORES[store].cart).pathname);
+  (store==='quickmart'?(new URL(tab.url).pathname==='/' || new URL(tab.url).pathname.startsWith('/shops/products/')):(store==='naivas' && new URL(tab.url).pathname==='/') || new URL(tab.url).pathname===new URL(STORES[store].cart).pathname);
 
 const destination=job=>{
-  if(['clear','verify','finalverify'].includes(job.phase))return STORES[job.plan.store].cart;
+  if(['clear','verify','finalverify'].includes(job.phase))return job.plan.store==='naivas' && job.layout==='react'?STORES.naivas.home:STORES[job.plan.store].cart;
   return itemURL(job);
 };
 
@@ -98,11 +98,11 @@ async function drive() {
       }
       if(job.phase==='probe') {
         if(job.plan.delivery.branch_id && result.branch!==job.plan.delivery.branch_id)throw Error('Your Quickmart branch differs from the compared branch. Open the store and select the same branch, or compare again.');
-        return {...job,branch:result.branch,started:true,index:0,phase:'clear'};
+        return {...job,branch:result.branch,layout:result.layout,started:true,index:0,phase:'clear'};
       }
       if(job.phase==='clear')return {...job,index:0,phase:'items'};
       if(job.phase==='items') {
-        if(job.plan.store==='naivas')return {...job,phase:'verify'};
+        if(job.plan.store==='naivas' && job.layout!=='react')return {...job,phase:'verify'};
         const index=job.index+1;
         return {...job,index:index<job.plan.products.length?index:0,phase:index<job.plan.products.length?'items':'finalverify'};
       }
@@ -173,7 +173,7 @@ async function receive(message,sender) {
       if(!storeURL(tab.url,job.plan.store))throw Error('Finish signing in, then return to the supermarket in its original tab.');
       const result=await runStep(job.tabId,{store:job.plan.store,phase:'probe'});
       if(job.plan.delivery.branch_id && result.branch!==job.plan.delivery.branch_id)throw Error('Your Quickmart branch differs from the compared branch. Select the same branch or compare prices again.');
-      let next={...job,branch:result.branch};
+      let next={...job,branch:result.branch,layout:result.layout || job.layout};
       if(job.branch && job.branch!==result.branch)throw Error('The branch changed during this transfer. Return to the previous branch or stop the transfer.');
       if(!job.started || job.phase==='probe')next={...next,started:true,index:0,phase:'clear'};
       await go(next,destination(next));

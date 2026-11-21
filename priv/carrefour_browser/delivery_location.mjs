@@ -1,3 +1,4 @@
+import {modernNaivas,readModernNaivasLocation} from './naivas_storefront.mjs';
 // Only visible store UI is used; no account data or cookies leave the browser.
 const roots = {carrefour: 'www.carrefour.ke', quickmart: 'www.quickmart.co.ke', naivas: 'www.naivas.online', foodplus: 'foodplus.co.ke'};
 export async function readLocation(page, store, {ignoreDialog = false} = {}) {
@@ -8,6 +9,8 @@ export async function readLocation(page, store, {ignoreDialog = false} = {}) {
   let label, branch_id, branch;
   if (store === 'carrefour') {
     label = (await page.locator('header button').filter({has: page.locator('img[src*="Caret_Down_Arrow_for_address_location"]')}).innerText({timeout: 3000})).trim();
+  } else if (store === 'naivas' && await modernNaivas(page)) {
+    return await readModernNaivasLocation(page);
   } else if (store === 'naivas') {
     label = (await page.locator('.geoLocation:visible').first().innerText({timeout: 3000})).trim();
   } else if (store === 'foodplus') {
