@@ -65,6 +65,10 @@ defmodule DealAgentWeb.ShopperLive do
        Application.get_env(:deal_agent, :browser_checkout_enabled, false) and
          not Application.get_env(:deal_agent, :remote_checkout_enabled, false)
      )
+     |> assign(
+       :local_helper_enabled,
+       Application.get_env(:deal_agent, :local_helper_enabled, false)
+     )
      |> assign(:remote_store, nil)
      |> assign(:shopping_list, ShoppingList.new())
      |> assign(:cart_jobs, %{})
@@ -166,6 +170,13 @@ defmodule DealAgentWeb.ShopperLive do
          )}
     end
   end
+
+  def handle_event(
+        "shop-now",
+        %{"store" => "carrefour"} = params,
+        %{assigns: %{local_helper_enabled: true}} = socket
+      ),
+      do: export_browser_basket(params, socket)
 
   def handle_event(event, _params, %{assigns: %{local_browser_enabled: false}} = socket)
       when event == "setup-delivery" or
@@ -294,44 +305,8 @@ defmodule DealAgentWeb.ShopperLive do
      )}
   end
 
-  def handle_event("shop-now", params, %{assigns: %{browser_checkout_enabled: true}} = socket) do
-    with store when not is_nil(store) <- store_for(params),
-         {:ok, plan} <-
-           CartPlan.build(
-             socket.assigns.shopping_list.items,
-             socket.assigns[store.selections_key],
-             store.adapter.name()
-           ) do
-      comparison_only =
-        Enum.any?(
-          Map.values(socket.assigns[store.selections_key]),
-          &Map.get(&1, :comparison_only, false)
-        )
-
-      profile =
-        if comparison_only,
-          do: %{label: "General catalogue — confirm delivery and prices in the store"},
-          else: socket.assigns.delivery_sessions[store.id] || %{}
-
-      delivery = %{
-        label: Map.get(profile, :label) || Map.get(profile, :area),
-        branch_id: Map.get(profile, :branch_id)
-      }
-
-      plan =
-        Map.merge(plan, %{
-          version: 3,
-          request_id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false),
-          created_at: System.system_time(:second),
-          delivery: delivery
-        })
-
-      {:noreply, push_event(socket, "browser-basket", %{plan: plan})}
-    else
-      {:error, reason} -> {:noreply, put_flash(socket, :error, cart_error_message(reason))}
-      _ -> {:noreply, put_flash(socket, :error, "Choose a supported supermarket first.")}
-    end
-  end
+  def handle_event("shop-now", params, %{assigns: %{browser_checkout_enabled: true}} = socket),
+    do: export_browser_basket(params, socket)
 
   @impl true
   def handle_event("shop-now", %{"store" => store_id} = params, socket) do
@@ -1310,6 +1285,45 @@ defmodule DealAgentWeb.ShopperLive do
       end)
 
     socket |> assign(store.results_key, %{}) |> assign(store.selections_key, %{})
+  end
+
+  defp export_browser_basket(params, socket) do
+    with store when not is_nil(store) <- store_for(params),
+         {:ok, plan} <-
+           CartPlan.build(
+             socket.assigns.shopping_list.items,
+             socket.assigns[store.selections_key],
+             store.adapter.name()
+           ) do
+      comparison_only =
+        Enum.any?(
+          Map.values(socket.assigns[store.selections_key]),
+          &Map.get(&1, :comparison_only, false)
+        )
+
+      profile =
+        if comparison_only,
+          do: %{label: "General catalogue — confirm delivery and prices in the store"},
+          else: socket.assigns.delivery_sessions[store.id] || %{}
+
+      delivery = %{
+        label: Map.get(profile, :label) || Map.get(profile, :area),
+        branch_id: Map.get(profile, :branch_id)
+      }
+
+      plan =
+        Map.merge(plan, %{
+          version: 3,
+          request_id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false),
+          created_at: System.system_time(:second),
+          delivery: delivery
+        })
+
+      {:noreply, push_event(socket, "browser-basket", %{plan: plan})}
+    else
+      {:error, reason} -> {:noreply, put_flash(socket, :error, cart_error_message(reason))}
+      _ -> {:noreply, put_flash(socket, :error, "Choose a supported supermarket first.")}
+    end
   end
 
   defp start_cart(socket, store, plan) do

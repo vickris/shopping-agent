@@ -41,6 +41,10 @@ config :deal_agent,
        :browser_checkout_enabled,
        System.get_env("BROWSER_CHECKOUT_ENABLED", "false") == "true"
 
+config :deal_agent,
+       :local_helper_enabled,
+       System.get_env("LOCAL_HELPER_ENABLED", "false") == "true"
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

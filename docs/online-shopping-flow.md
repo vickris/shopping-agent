@@ -114,3 +114,13 @@ address** before preparing the cart. Catalogue comparison remains available.
 
 Existing Render services must update these environment variables and deploy the
 new version; changing the Blueprint does not update a running service by itself.
+
+### Local Carrefour checkout window
+
+For the desktop demo, `LOCAL_HELPER_ENABLED=true` routes Carrefour to the local
+native-messaging helper instead of embedded checkout. The extension must be
+version 0.5.0 or newer, and the helper must be installed on the shopper's computer.
+Preparation is headless; checkout opens a separate Carrefour Firefox window using
+the same guest cart, restored and verified locally. It does not open a tab in the
+existing Chrome session. See `priv/local_helper/README.md` for setup. Other stores
+continue to use their configured checkout flow.

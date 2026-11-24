@@ -87,3 +87,16 @@ clears the drawer with the store confirmation, and verifies the final basket.
 Naivas requires a saved delivery address; its default “Nairobi, Kenya” label is
 not treated as confirmation. Complete its address/contact form once, then resume.
 Quickmart uses the direct product form and enforces its seller branch.
+
+## Local Carrefour helper
+
+Version 0.5.0 adds Chrome native messaging for optional local, headless Carrefour
+preparation. With `LOCAL_HELPER_ENABLED=true`, Carrefour baskets are routed to
+`io.deal_agent.cart_helper`; no retailer tab is created. Click checkout to open a
+separate local Firefox window with the verified guest cart. Other stores retain
+the configured extension or embedded checkout flow.
+
+Install the helper using `priv/local_helper/README.md` in the project checkout.
+The native host registration must allow this extension's installed ID. Native
+messaging carries only basket descriptions, commands and progress; retailer
+cookies and browser storage never cross into the app or extension.

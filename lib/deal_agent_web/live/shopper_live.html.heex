@@ -626,6 +626,7 @@
                   >
                     Before preparing your Naivas cart, enter and save your full delivery address on Naivas, including any required contact details. Naivas needs this before items can be added to its cart. Choosing an area here or allowing location access does not complete that step.
                   </p>
+                  <% helper_checkout = @local_helper_enabled and store.id == "carrefour" %>
                   <% cart_job = @cart_jobs[store.id] %>
                   <button
                     phx-click="shop-now"
@@ -633,13 +634,14 @@
                     class="shop-now"
                     disabled={
                       (!@local_browser_enabled and !@remote_checkout_enabled and
-                         !@browser_checkout_enabled) or
+                         !@browser_checkout_enabled and !helper_checkout) or
                         store.id == "foodplus" or
                         total.unresolved == length(@shopping_list.items) or
                         (cart_job && cart_job.status != "closed")
                     }
                   >
                     {cond do
+                      helper_checkout -> "Prepare cart"
                       @browser_checkout_enabled -> "Prepare cart"
                       @remote_checkout_enabled -> "Prepare cart"
                       @local_browser_enabled -> "Shop now"
@@ -647,26 +649,33 @@
                     end}
                   </button>
                   <p :if={store.id != "foodplus"} class="mt-2 text-xs text-gray-500">
-                    <%= if @browser_checkout_enabled do %>
-                      Prepares a fresh supermarket cart in the background, replacing its existing contents. Stay here—we’ll notify you when it’s ready. Sign-in or delivery setup may need your attention.
+                    <%= if helper_checkout do %>
+                      Prepares a fresh Carrefour cart headlessly on this computer. Click checkout when it is ready to open a Carrefour browser window. The local helper and desktop extension are required.
                     <% else %>
-                      <%= if @remote_checkout_enabled do %>
-                        Prepares your basket, then opens a private checkout view here. You review and pay directly in the store session.
+                      <%= if @browser_checkout_enabled do %>
+                        Prepares a fresh supermarket cart in the background, replacing its existing contents. Stay here—we’ll notify you when it’s ready. Sign-in or delivery setup may need your attention.
                       <% else %>
-                        <%= if @local_browser_enabled do %>
-                          Prepares your basket in the background. Open it on this computer to review and pay.
+                        <%= if @remote_checkout_enabled do %>
+                          Prepares your basket, then opens a private checkout view here. You review and pay directly in the store session.
                         <% else %>
-                          Compare prices and select products. Online checkout is coming later.
+                          <%= if @local_browser_enabled do %>
+                            Prepares your basket in the background. Open it on this computer to review and pay.
+                          <% else %>
+                            Compare prices and select products. Online checkout is coming later.
+                          <% end %>
                         <% end %>
                       <% end %>
                     <% end %>
                   </p>
                   <div
-                    :if={@browser_checkout_enabled and store.id != "foodplus"}
+                    :if={
+                      helper_checkout or (@browser_checkout_enabled and store.id != "foodplus")
+                    }
                     id={"#{store.id}-browser-checkout"}
                     phx-hook="BrowserCheckout"
                     phx-update="ignore"
                     data-store={store.id}
+                    data-transport={if helper_checkout, do: "local-helper", else: "extension"}
                     class="browser-checkout-panel"
                   >
                     <p data-browser-checkout-status role="status">
@@ -687,13 +696,22 @@
                     <a href={~p"/downloads/shopping-agent-extension.zip"} download>
                       Download checkout extension
                     </a>
+                    <p :if={helper_checkout} class="mt-2 text-xs text-gray-500">
+                      <a href={~p"/downloads/shopping-agent-local-helper.zip"} download>
+                        Download local Carrefour helper
+                      </a>
+                      · Follow its included setup guide once on this computer, then reload the extension. Your Carrefour session stays on your computer. Stop an attempt before preparing another cart.
+                    </p>
                     <details>
                       <summary>Install for the demo</summary>
                       <p>
                         Unzip the download, open chrome://extensions (or edge://extensions), enable Developer mode and choose Load unpacked. Select the extracted folder, then click Prepare cart again.
                       </p>
-                      <p>
+                      <p :if={!helper_checkout}>
                         The extension asks for access to the selected supermarket. Login and payment stay on that store’s website. Phones are not supported by this extension.
+                      </p>
+                      <p :if={helper_checkout}>
+                        The helper requires desktop Chrome or Edge on macOS or Linux. Complete the helper installation before preparing a cart. Login and payment stay in the Carrefour browser window.
                       </p>
                     </details>
                   </div>

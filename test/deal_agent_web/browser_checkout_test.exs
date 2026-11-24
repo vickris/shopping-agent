@@ -3,8 +3,15 @@ defmodule DealAgentWeb.BrowserCheckoutTest do
   import Phoenix.LiveViewTest
 
   setup do
-    keys = [:browser_checkout_enabled, :local_browser_enabled, :remote_checkout_enabled]
+    keys = [
+      :browser_checkout_enabled,
+      :local_browser_enabled,
+      :remote_checkout_enabled,
+      :local_helper_enabled
+    ]
+
     old = Map.new(keys, &{&1, Application.get_env(:deal_agent, &1)})
+    Application.put_env(:deal_agent, :local_helper_enabled, false)
     Application.put_env(:deal_agent, :browser_checkout_enabled, true)
     Application.put_env(:deal_agent, :local_browser_enabled, false)
     Application.put_env(:deal_agent, :remote_checkout_enabled, false)
@@ -42,6 +49,54 @@ defmodule DealAgentWeb.BrowserCheckoutTest do
 
     refute has_element?(view, "#carrefour-cart-status")
     refute has_element?(view, "#private-checkout")
+  end
+
+  test "local Carrefour helper takes precedence over embedded checkout without a server cart", %{
+    conn: conn
+  } do
+    Application.put_env(:deal_agent, :local_helper_enabled, true)
+    Application.put_env(:deal_agent, :remote_checkout_enabled, true)
+    {:ok, view, _} = live(conn, "/")
+    view |> form("#chat-form", chat: %{message: "2 litres of milk"}) |> render_submit()
+    render_async(view, 1000)
+    render_async(view, 1000)
+    view |> element("button[phx-value-product-id='milk-1']") |> render_click()
+
+    assert has_element?(view, "#carrefour-browser-checkout[data-transport='local-helper']")
+
+    assert has_element?(
+             view,
+             "#carrefour-browser-checkout a[href$='shopping-agent-local-helper.zip']"
+           )
+
+    refute has_element?(view, "#naivas-browser-checkout")
+
+    view
+    |> element("button.shop-now[phx-value-store='carrefour']", "Prepare cart")
+    |> render_click()
+
+    assert_push_event(view, "browser-basket", %{
+      plan: %{store: "carrefour", products: [%{id: "milk-1", packs: 2}]}
+    })
+
+    refute has_element?(view, "#carrefour-cart-status")
+    refute has_element?(view, "#private-checkout")
+  end
+
+  test "local helper works without server or extension cart preparation enabled", %{conn: conn} do
+    Application.put_env(:deal_agent, :local_helper_enabled, true)
+    Application.put_env(:deal_agent, :browser_checkout_enabled, false)
+    {:ok, view, _} = live(conn, "/")
+    view |> form("#chat-form", chat: %{message: "2 litres of milk"}) |> render_submit()
+    render_async(view, 1000)
+    render_async(view, 1000)
+    view |> element("button[phx-value-product-id='milk-1']") |> render_click()
+
+    view
+    |> element("button.shop-now[phx-value-store='carrefour']", "Prepare cart")
+    |> render_click()
+
+    assert_push_event(view, "browser-basket", %{plan: %{store: "carrefour"}})
   end
 
   test "catalogue comparison remains available without a deliverable location", %{conn: conn} do

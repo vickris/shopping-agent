@@ -5,9 +5,10 @@ const supportsVersion = (version, requiredMinor) => {
 
 export const BrowserCheckout = {
   mounted() {
+    this.localHelper=this.el.dataset.transport==='local-helper'
     this.status=this.el.querySelector('[data-browser-checkout-status]')
     this.actions=Array.from(this.el.querySelectorAll('[data-checkout-action]'))
-    this.sendControl=action=>window.postMessage({source:'shopping-agent',type:'basket:control',request_id:this.requestId,action},location.origin)
+    this.sendControl=action=>window.postMessage({source:'shopping-agent',type:this.localHelper?'helper:control':'basket:control',request_id:this.requestId,action},location.origin)
     this.actionListener=event=>{
       const button=event.target.closest('[data-checkout-action]')
       if(button && this.el.contains(button))this.sendControl(button.dataset.checkoutAction)
@@ -19,7 +20,7 @@ export const BrowserCheckout = {
       if(['stopped','closed'].includes(status) && typeof document!=='undefined' && document.getElementById('browser-cart-notification')?.dataset.requestId===this.requestId)document.getElementById('browser-cart-notification').remove()
       for(const button of this.actions) {
         const action=button.dataset.checkoutAction
-        button.hidden=action==='setup'?status!=='permission_required':action==='focus'?!['ready','attention'].includes(status):action==='resume'?status!=='attention':!['starting','opening','loading','executing','probing','attention','permission_required'].includes(status)
+        button.hidden=action==='setup'?status!=='permission_required':action==='focus'?!['ready','attention'].includes(status):action==='resume'?(this.localHelper || status!=='attention'):!(this.localHelper?['starting','opening','loading','executing','probing','attention','ready']:['starting','opening','loading','executing','probing','attention','permission_required']).includes(status)
         if(action==='focus')button.textContent=status==='ready'?'Open cart & checkout':'Open supermarket'
       }
       if(status==='ready' && this.notifiedRequest!==this.requestId && typeof document!=='undefined') {
@@ -36,13 +37,13 @@ export const BrowserCheckout = {
     this.handleEvent('browser-basket',({plan})=>{
       if(plan.store!==this.el.dataset.store)return
       this.requestId=plan.request_id
-      this.requiredMinor=plan.version>=3?3:plan.version>=2?2:0
+      this.requiredMinor=this.localHelper?5:plan.version>=3?3:plan.version>=2?2:0
       if(typeof document!=='undefined')document.getElementById('browser-cart-notification')?.remove()
       this.showProgress({status:'starting',message:'Preparing your fresh cart in the background…'})
-      window.postMessage({source:'shopping-agent',type:'basket:offer',plan},location.origin)
+      window.postMessage({source:'shopping-agent',type:this.localHelper?'helper:offer':'basket:offer',plan},location.origin)
       clearTimeout(this.timer)
       this.timer=setTimeout(()=>{
-        this.showProgress({status:'missing',message:'Extension not found. Download and install it below, then prepare the cart again.'})
+        this.showProgress({status:'missing',message:'Extension not found. Install or reload the checkout extension, then prepare the cart again.'})
       },5000)
     })
     this.listener=event=>{

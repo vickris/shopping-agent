@@ -1,5 +1,7 @@
+import {localHelper} from './local_helper.js';
 import {STORES,APP_ORIGINS,appOrigin,storeURL,validatePlan,itemURL} from './policy.js';
 import {cartStep} from './adapters.js';
+const receiveHelper=localHelper(chrome);
 let queue=Promise.resolve();
 const exclusive=fn=>{const next=queue.then(fn);queue=next.catch(()=>{});return next;};
 const inFlight=new Set();
@@ -114,6 +116,7 @@ async function drive() {
   finally{inFlight.delete(job.plan.request_id);drive().catch(()=>{});}
 }
 async function receive(message,sender) {
+  if(['helper:import','helper:control'].includes(message.type))return receiveHelper(message,sender);
   if(message.type==='basket:import') {
     if(!sender.tab || !appOrigin(sender.url))throw Error('Basket source is not allowed.');
     const plan=validatePlan(message.plan);

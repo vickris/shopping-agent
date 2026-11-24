@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Shopping Agent \u2014 Browser Checkout",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "minimum_chrome_version": "120",
   "description": "Build your selected supermarket basket in your own browser. You sign in, review and pay on the store's website.",
   "permissions": [
     "storage",
     "scripting",
-    "alarms"
+    "alarms",
+    "nativeMessaging"
   ],
   "optional_host_permissions": [
     "https://www.carrefour.ke/*",
