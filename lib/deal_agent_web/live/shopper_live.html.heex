@@ -147,13 +147,13 @@
               Retry automatically
             </button>
             <button
-              :if={@local_browser_enabled}
+              :if={@local_browser_enabled or @remote_checkout_enabled}
               phx-click="delivery-window"
               phx-value-action="open"
               phx-value-store={store.id}
               class="mt-2 text-sm text-blue-700 underline"
             >
-              Show store window
+              Open delivery address setup
             </button>
             <button
               phx-click="delivery-window"
@@ -619,6 +619,13 @@
                   >
                     Foodplus automated checkout is not supported yet. Compare prices here, then complete your purchase on the Foodplus website and confirm delivery to your address.
                   </p>
+                  <p
+                    :if={store.id == "naivas"}
+                    id="naivas-address-notice"
+                    class="mt-2 text-sm text-amber-800"
+                  >
+                    Before preparing your Naivas cart, enter and save your full delivery address on Naivas, including any required contact details. Naivas needs this before items can be added to its cart. Choosing an area here or allowing location access does not complete that step.
+                  </p>
                   <% cart_job = @cart_jobs[store.id] %>
                   <button
                     phx-click="shop-now"
@@ -634,7 +641,8 @@
                   >
                     {cond do
                       @browser_checkout_enabled -> "Prepare cart"
-                      @local_browser_enabled or @remote_checkout_enabled -> "Shop now"
+                      @remote_checkout_enabled -> "Prepare cart"
+                      @local_browser_enabled -> "Shop now"
                       true -> "Checkout unavailable"
                     end}
                   </button>
@@ -770,7 +778,7 @@
       </p>
     </div>
     <button
-      :if={@cart_jobs[@remote_store].status == "awaiting_input"}
+      :if={get_in(@cart_jobs, [@remote_store, :status]) == "awaiting_input"}
       type="button"
       phx-click="cart-window"
       phx-value-action="resume"
@@ -778,10 +786,19 @@
     >
       Continue preparation after completing the store prompt
     </button>
+    <button
+      :if={is_nil(@cart_jobs[@remote_store])}
+      type="button"
+      phx-click="delivery-window"
+      phx-value-action="confirm"
+      phx-value-store={@remote_store}
+    >
+      Confirm saved delivery address
+    </button>
     <button type="button" phx-click="remote-close">Back to comparison</button>
     <button
       type="button"
-      phx-click="cart-window"
+      phx-click={if @cart_jobs[@remote_store], do: "cart-window", else: "delivery-window"}
       phx-value-action="close"
       phx-value-store={@remote_store}
     >

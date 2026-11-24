@@ -62,7 +62,8 @@ defmodule DealAgentWeb.ShopperLive do
      )
      |> assign(
        :browser_checkout_enabled,
-       Application.get_env(:deal_agent, :browser_checkout_enabled, false)
+       Application.get_env(:deal_agent, :browser_checkout_enabled, false) and
+         not Application.get_env(:deal_agent, :remote_checkout_enabled, false)
      )
      |> assign(:remote_store, nil)
      |> assign(:shopping_list, ShoppingList.new())
@@ -179,7 +180,7 @@ defmodule DealAgentWeb.ShopperLive do
         %{assigns: %{local_browser_enabled: false}} = socket
       )
       when action in ["open", "confirm", "resume"] and
-             (event == "delivery-window" or
+             ((event == "delivery-window" and not socket.assigns.remote_checkout_enabled) or
                 (event == "cart-window" and not socket.assigns.remote_checkout_enabled)) do
     online_preview_unavailable(socket)
   end
@@ -213,6 +214,21 @@ defmodule DealAgentWeb.ShopperLive do
            :error,
            "Close the existing store session, then enter a delivery area of 1–200 characters."
          )}
+    end
+  end
+
+  def handle_event(
+        "delivery-window",
+        %{"store" => store_id, "action" => "open"},
+        %{assigns: %{remote_checkout_enabled: true}} = socket
+      ) do
+    with %{id: id} <- socket.assigns.delivery_sessions[store_id],
+         {:ok, _} <- DeliverySessions.remote(self(), id, %{"type" => "frame"}) do
+      {:noreply, assign(socket, :remote_store, store_id)}
+    else
+      _ ->
+        {:noreply,
+         put_flash(socket, :error, "The store session is busy or unavailable. Try again shortly.")}
     end
   end
 
@@ -422,9 +438,11 @@ defmodule DealAgentWeb.ShopperLive do
     profile = socket.assigns.delivery_sessions[store_id]
 
     result =
-      if socket.assigns.remote_checkout_enabled and job && profile && job.id == profile.id and
-           job.status in ["ready", "needs_attention", "awaiting_input"] do
-        DeliverySessions.remote(self(), job.id, input)
+      if socket.assigns.remote_checkout_enabled and profile &&
+           (is_nil(job) or
+              (job.id == profile.id and
+                 job.status in ["ready", "needs_attention", "awaiting_input"])) do
+        DeliverySessions.remote(self(), profile.id, input)
       else
         {:error, :remote_unavailable}
       end
@@ -1001,6 +1019,11 @@ defmodule DealAgentWeb.ShopperLive do
                       message:
                         "Delivery location changed. Check the store window and confirm again."
                   })
+
+            socket =
+              if type == "closed" and socket.assigns.remote_store == store_id,
+                do: assign(socket, :remote_store, nil),
+                else: socket
 
             {:noreply, assign(socket, :delivery_sessions, profiles)}
 

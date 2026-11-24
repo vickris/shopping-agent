@@ -22,7 +22,7 @@ export async function cartStep({store,product,products,phase,branch,readonly=fal
     if(modernLocation) {
       const label=text(modernLocation);
       if(phase==='probe') {
-        if(!label || /^Nairobi,?\s*Kenya$|select.*address|your address/i.test(label))throw issue('Select your delivery address on Naivas, then resume preparation here.');
+        if(!label || /^Nairobi,?\s*Kenya$|select.*address|your address/i.test(label))throw issue('Enter and save your full delivery address and any required contact details on Naivas before cart preparation can add items. Then resume preparation here.');
         return {ok:true,layout:'react'};
       }
       const sheet=()=>all('[role="dialog"][data-slot="sheet-content"]').find(el=>visible(el)&&/Shopping Cart/i.test(text(el)));
@@ -95,7 +95,7 @@ export async function cartStep({store,product,products,phase,branch,readonly=fal
       }
       if(store==='naivas') {
         if(document.querySelector('button[data-slot="button"]') && !document.querySelector('.geoLocation'))throw issue('Naivas has changed its website layout. Automatic checkout needs an adapter update; add the selected products on its website for now.');
-        await wait(()=>all('.geoLocation').find(el=>visible(el)&&text(el)&&!/select location|choose location|enter your/i.test(text(el)))).catch(()=>{throw issue('Set your delivery address on Naivas, then resume preparation here.');});
+        await wait(()=>all('.geoLocation').find(el=>visible(el)&&text(el)&&!/select location|choose location|enter your/i.test(text(el)))).catch(()=>{throw issue('Enter and save your full delivery address and any required contact details on Naivas before cart preparation can add items. Then resume preparation here.');});
       }
       return {ok:true};
     }

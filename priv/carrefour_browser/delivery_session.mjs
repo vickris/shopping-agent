@@ -115,7 +115,7 @@ input.on('line',async line=>{
   let message;
   try {message=JSON.parse(line);}catch{return;}
   if(message.action==='remote') {
-    if(!setup.remote_checkout || (!cartPlan && !resume) || remoteBusy || (busy && !resume)) {
+    if(!setup.remote_checkout || starting || remoteBusy || (busy && !resume)) {
       emit({type:'remote_reply',id:message.id,error:'remote_unavailable'});return;
     }
     remoteBusy=true;

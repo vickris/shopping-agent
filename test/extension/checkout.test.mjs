@@ -167,6 +167,6 @@ test('Naivas React drawer clears previous basket, adds direct product and verifi
     assert.equal(await page.evaluate(()=>localStorage.getItem('paid')),null);
     await page.route('https://www.naivas.online/**',route=>route.fulfill({contentType:'text/html',body:naivasReact({address:'Nairobi, Kenya'})}));
     await page.reload();
-    assert.match((await page.evaluate(cartStep,{store:'naivas',phase:'probe'})).error,/Select your delivery address/);
+    assert.match((await page.evaluate(cartStep,{store:'naivas',phase:'probe'})).error,/Enter and save your full delivery address.*before cart preparation can add items/);
   } finally {await browser.close();}
 });

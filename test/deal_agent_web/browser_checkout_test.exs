@@ -7,7 +7,7 @@ defmodule DealAgentWeb.BrowserCheckoutTest do
     old = Map.new(keys, &{&1, Application.get_env(:deal_agent, &1)})
     Application.put_env(:deal_agent, :browser_checkout_enabled, true)
     Application.put_env(:deal_agent, :local_browser_enabled, false)
-    Application.put_env(:deal_agent, :remote_checkout_enabled, true)
+    Application.put_env(:deal_agent, :remote_checkout_enabled, false)
 
     on_exit(fn ->
       for {key, value} <- old do
@@ -29,6 +29,8 @@ defmodule DealAgentWeb.BrowserCheckoutTest do
     render_async(view, 1000)
     view |> element("button[phx-value-product-id='milk-1']") |> render_click()
     assert has_element?(view, "#carrefour-browser-checkout a[download]")
+    assert has_element?(view, "#naivas-address-notice", "Before preparing your Naivas cart")
+    assert has_element?(view, "#naivas-address-notice", "before items can be added")
 
     view
     |> element("button.shop-now[phx-value-store='carrefour']", "Prepare cart")

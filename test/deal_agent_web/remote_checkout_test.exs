@@ -3,9 +3,16 @@ defmodule DealAgentWeb.RemoteCheckoutTest do
   import Phoenix.LiveViewTest
 
   setup do
-    keys = [:remote_checkout_enabled, :local_browser_enabled, :require_delivery_location]
+    keys = [
+      :remote_checkout_enabled,
+      :local_browser_enabled,
+      :require_delivery_location,
+      :browser_checkout_enabled
+    ]
+
     old = Map.new(keys, &{&1, Application.get_env(:deal_agent, &1)})
     Application.put_env(:deal_agent, :remote_checkout_enabled, true)
+    Application.put_env(:deal_agent, :browser_checkout_enabled, true)
     Application.put_env(:deal_agent, :local_browser_enabled, false)
     Application.put_env(:deal_agent, :require_delivery_location, true)
 
@@ -22,6 +29,7 @@ defmodule DealAgentWeb.RemoteCheckoutTest do
 
   test "hosted shoppers prepare the existing basket and control a private view", %{conn: conn} do
     {:ok, view, _} = live(conn, "/")
+    refute has_element?(view, "#carrefour-browser-checkout")
 
     render_hook(view, "location-detected", %{
       "latitude" => -1.29,
@@ -30,6 +38,14 @@ defmodule DealAgentWeb.RemoteCheckoutTest do
     })
 
     wait_until(fn -> has_element?(view, "#carrefour-delivery", "Location confirmed") end)
+
+    view
+    |> element("#carrefour-delivery button[phx-value-action='open']")
+    |> render_click()
+
+    assert has_element?(view, "#private-checkout", "Confirm saved delivery address")
+    render_hook(view, "remote-control", %{"remote_input" => %{"type" => "frame"}})
+    view |> element("button[phx-click='remote-close']") |> render_click()
     view |> form("#chat-form", chat: %{message: "2 litres of milk"}) |> render_submit()
     render_async(view, 1000)
     render_async(view, 1000)

@@ -97,3 +97,20 @@ Start with one Carrefour compatibility prototype, without placing an order:
 Prefer managed infrastructure if the whole prototype passes. Otherwise assess
 the self-hosted worker approach; do not change working store engines just to
 fit a provider or promise Firefox handoff based on automation support alone.
+
+### Headless preparation and embedded checkout
+
+The hosted configuration uses `REMOTE_CHECKOUT_ENABLED=true` and
+`BROWSER_CHECKOUT_ENABLED=false`. Remote checkout takes precedence if both are
+enabled. Preparation runs in the existing server-side headless delivery session;
+it does not create an extension tab. The shopper explicitly opens the private
+checkout view to review and pay inside the app.
+
+Naivas requires a saved full delivery address, including required contact details,
+before adding products. Coordinates or a comparison area alone do not satisfy
+this requirement. Use **Open delivery address setup** in location settings to
+complete Naivas's form in the embedded store view, then **Confirm saved delivery
+address** before preparing the cart. Catalogue comparison remains available.
+
+Existing Render services must update these environment variables and deploy the
+new version; changing the Blueprint does not update a running service by itself.

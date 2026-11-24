@@ -15,11 +15,11 @@ defmodule DealAgent.Delivery.RemoteCheckoutTest do
     :ok
   end
 
-  test "only the live owner can control a reserved cart; closing destroys access" do
+  test "only the live owner can set delivery details and control a reserved cart; closing destroys access" do
     owner = self()
     assert {:ok, id} = Sessions.start(owner, "carrefour", "Remote demo")
     assert_receive {:delivery_event, ^id, %{"type" => "setup"}}, 3000
-    assert {:error, :remote_unavailable} = Sessions.remote(owner, id, %{"type" => "frame"})
+    assert {:ok, %{"image" => "fixture"}} = Sessions.remote(owner, id, %{"type" => "frame"})
     assert :ok = Sessions.command(owner, id, "confirm")
     assert_receive {:delivery_event, ^id, %{"type" => "confirmed"}}, 3000
     assert :ok = Sessions.cart(owner, id, "carrefour", %{delivery_session_id: id, products: []})

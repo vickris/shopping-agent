@@ -177,7 +177,7 @@ defmodule DealAgent.Delivery.Sessions do
   def handle_call({:remote, owner, id, input}, {caller, _} = from, sessions) do
     case sessions[id] do
       %{owner: ^owner, remote_pending: nil, busy: busy} = session
-      when caller == owner and (busy == :handoff or busy == {:cart, nil}) ->
+      when caller == owner and (is_nil(busy) or busy == :handoff or busy == {:cart, nil}) ->
         if Application.get_env(:deal_agent, :remote_checkout_enabled, false) and
              DealAgent.Checkout.RemoteInput.valid?(input) do
           request_id = Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
