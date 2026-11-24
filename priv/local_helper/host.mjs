@@ -18,7 +18,7 @@ const receive=async message=>{
     requestId=plan.request_id;starting=true;
     expiry=setTimeout(close,1800000);
     deadline=setTimeout(async()=>{emit({status:'attention',message:'Cart preparation timed out. Stop this attempt before preparing another cart.'});await close();},240000);
-    cart=await createLocalCart({plan,launch:headless=>firefox.launch({headless,timeout:30000}),emit});
+    cart=await createLocalCart({plan,launch:headless=>firefox.launch({headless,timeout:30000,firefoxUserPrefs:{'network.http.http3.enable':false}}),emit});
     await cart.prepare();clearTimeout(deadline);starting=false;
   } else {
     if(message?.action==='close' && message.request_id===requestId)return close();

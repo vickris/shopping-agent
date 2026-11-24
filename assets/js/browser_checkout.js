@@ -39,7 +39,7 @@ export const BrowserCheckout = {
       this.requestId=plan.request_id
       this.requiredMinor=this.localHelper?5:plan.version>=3?3:plan.version>=2?2:0
       if(typeof document!=='undefined')document.getElementById('browser-cart-notification')?.remove()
-      this.showProgress({status:'starting',message:'Preparing your fresh cart in the background…'})
+      this.showProgress({status:'starting',message:'Adding your selected items…'})
       window.postMessage({source:'shopping-agent',type:this.localHelper?'helper:offer':'basket:offer',plan},location.origin)
       clearTimeout(this.timer)
       this.timer=setTimeout(()=>{
@@ -59,7 +59,7 @@ export const BrowserCheckout = {
         return
       }
       if(event.data.accepted) {
-        this.showProgress({status:event.data.status || 'starting',message:event.data.message || 'Preparing your fresh cart in the background. We’ll notify you here when it is ready.'})
+        this.showProgress({status:event.data.status || 'starting',message:event.data.message || 'Adding your selected items…'})
       } else this.showProgress({status:'error',message:event.data.error || 'The extension could not receive this basket.'})
     }
     window.addEventListener('message',this.listener)

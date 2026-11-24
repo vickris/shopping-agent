@@ -124,3 +124,17 @@ Preparation is headless; checkout opens a separate Carrefour Firefox window usin
 the same guest cart, restored and verified locally. It does not open a tab in the
 existing Chrome session. See `priv/local_helper/README.md` for setup. Other stores
 continue to use their configured checkout flow.
+
+### Naivas address confirmation inside the app
+
+With remote checkout enabled, **Set Naivas delivery address** opens the store's
+address form in the existing app view, including when geolocation is unavailable.
+The shopper saves their address in Naivas and clicks **Confirm saved delivery
+address**. Modern Naivas confirmation checks that the address survives navigation
+before returning to comparison and refreshing products for the saved location.
+An incomplete form or unsaved address does not count as confirmed. GPS sessions
+can use this manual completion step; other stores retain automatic confirmation.
+
+The local Carrefour helper reports the store's specific cart errors. Protocol
+errors on page navigation can retry once; add-to-cart actions never retry after
+an uncertain result. Progress shows item additions and cart readiness.

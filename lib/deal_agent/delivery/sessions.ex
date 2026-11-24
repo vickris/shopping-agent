@@ -86,7 +86,8 @@ defmodule DealAgent.Delivery.Sessions do
       %{owner: ^owner} when action == "close" ->
         {:reply, :ok, close_session(sessions, id)}
 
-      %{owner: ^owner, automatic: true} when action == "confirm" ->
+      %{owner: ^owner, automatic: true, store: store}
+      when action == "confirm" and store != "naivas" ->
         {:reply, {:error, :automatic_location}, sessions}
 
       %{owner: ^owner, automatic: true, confirmed: false, busy: nil} = session
@@ -96,7 +97,8 @@ defmodule DealAgent.Delivery.Sessions do
         timer = Process.send_after(self(), {:location_timeout, id, token}, 180_000)
         {:reply, :ok, Map.put(sessions, id, %{session | busy: {:locating, timer, token}})}
 
-      %{owner: ^owner, confirmed: true} when action == "confirm" ->
+      %{owner: ^owner, confirmed: true, store: store}
+      when action == "confirm" and store != "naivas" ->
         {:reply, {:error, :already_confirmed}, sessions}
 
       %{owner: ^owner} = session

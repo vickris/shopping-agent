@@ -69,6 +69,7 @@ defmodule DealAgentWeb.ShopperLive do
        :local_helper_enabled,
        Application.get_env(:deal_agent, :local_helper_enabled, false)
      )
+     |> assign(:pending_address_store, nil)
      |> assign(:remote_store, nil)
      |> assign(:shopping_list, ShoppingList.new())
      |> assign(:cart_jobs, %{})
@@ -227,6 +228,43 @@ defmodule DealAgentWeb.ShopperLive do
          )}
     end
   end
+
+  def handle_event("naivas-address", _, %{assigns: %{remote_checkout_enabled: true}} = socket) do
+    case socket.assigns.delivery_sessions["naivas"] do
+      %{id: id, status: status} when status != "opening" ->
+        {:noreply, open_address_view(socket, "naivas", id)}
+
+      %{status: "opening"} ->
+        {:noreply, assign(socket, :pending_address_store, "naivas")}
+
+      nil ->
+        case DeliverySessions.start(self(), "naivas", "Naivas delivery address") do
+          {:ok, id} ->
+            profile = %{
+              id: id,
+              status: "opening",
+              area: "Naivas delivery address",
+              label: nil,
+              message: "Opening your Naivas delivery address form…"
+            }
+
+            {:noreply,
+             socket
+             |> assign(
+               :delivery_sessions,
+               Map.put(socket.assigns.delivery_sessions, "naivas", profile)
+             )
+             |> assign(:pending_address_store, "naivas")}
+
+          _ ->
+            {:noreply,
+             put_flash(socket, :error, "Naivas address setup is unavailable. Try again shortly.")}
+        end
+    end
+  end
+
+  def handle_event("naivas-address", _, socket),
+    do: {:noreply, put_flash(socket, :error, "Naivas address setup is unavailable right now.")}
 
   def handle_event(
         "delivery-window",
@@ -405,7 +443,7 @@ defmodule DealAgentWeb.ShopperLive do
   end
 
   def handle_event("remote-close", _, socket),
-    do: {:noreply, assign(socket, :remote_store, nil)}
+    do: {:noreply, socket |> assign(:remote_store, nil) |> assign(:pending_address_store, nil)}
 
   def handle_event("remote-control", %{"remote_input" => input}, socket) do
     store_id = socket.assigns.remote_store
@@ -915,11 +953,27 @@ defmodule DealAgentWeb.ShopperLive do
     end
   end
 
+  def handle_info({:show_delivery_address, store_id, id}, socket) do
+    case socket.assigns.delivery_sessions[store_id] do
+      %{id: ^id} -> {:noreply, open_address_view(socket, store_id, id)}
+      _ -> {:noreply, socket}
+    end
+  end
+
   @impl true
   def handle_info({:delivery_event, id, event}, socket) do
     case Enum.find(socket.assigns.delivery_sessions, fn {_, profile} -> profile.id == id end) do
       {store_id, profile} ->
         store = store_for(%{"store" => store_id})
+
+        socket =
+          if socket.assigns.pending_address_store == store_id and
+               event["type"] in ["setup", "confirmed"] and event["status"] != "opening" do
+            send(self(), {:show_delivery_address, store_id, id})
+            assign(socket, :pending_address_store, nil)
+          else
+            socket
+          end
 
         case event do
           %{"type" => "window", "status" => status} ->
@@ -948,6 +1002,12 @@ defmodule DealAgentWeb.ShopperLive do
           %{"type" => "confirmed", "location" => location} ->
             socket = invalidate_store(socket, store)
 
+            socket =
+              if store_id == "naivas" and location["confirmation"] == "store_address" and
+                   is_nil(socket.assigns.cart_jobs[store_id]),
+                 do: assign(socket, :remote_store, nil),
+                 else: socket
+
             updated =
               %{
                 profile
@@ -961,7 +1021,13 @@ defmodule DealAgentWeb.ShopperLive do
                         if(location["confirmation"] == "geolocation",
                           do:
                             "Using the store service area selected from your current location. Final delivery availability is checked at checkout.",
-                          else: "Using the delivery location you confirmed in the store window."
+                          else:
+                            if(location["confirmation"] == "store_address",
+                              do:
+                                "Naivas saved your delivery address. You can select items and prepare your cart.",
+                              else:
+                                "Using the delivery location you confirmed in the store window."
+                            )
                         )
                     )
               }
@@ -983,6 +1049,11 @@ defmodule DealAgentWeb.ShopperLive do
 
           %{"type" => type} when type in ["closed", "invalidated"] ->
             socket = invalidate_store(socket, store)
+
+            socket =
+              if socket.assigns.pending_address_store == store_id,
+                do: assign(socket, :pending_address_store, nil),
+                else: socket
 
             profiles =
               if type == "closed",
@@ -1287,6 +1358,20 @@ defmodule DealAgentWeb.ShopperLive do
     socket |> assign(store.results_key, %{}) |> assign(store.selections_key, %{})
   end
 
+  defp open_address_view(socket, store_id, id) do
+    case DeliverySessions.remote(self(), id, %{"type" => "frame"}) do
+      {:ok, _} ->
+        assign(socket, :remote_store, store_id)
+
+      _ ->
+        put_flash(
+          socket,
+          :error,
+          "The store is still loading or busy. Try address setup again shortly."
+        )
+    end
+  end
+
   defp export_browser_basket(params, socket) do
     with store when not is_nil(store) <- store_for(params),
          {:ok, plan} <-
@@ -1492,7 +1577,7 @@ defmodule DealAgentWeb.ShopperLive do
 
   defp search_error_message(:browser_http2_error),
     do:
-      "The headless browser could not load Carrefour: its HTTP/2 connection failed. Please try again later or view the store below."
+      "Carrefour could not load because its connection failed. Please try again later or view the store below."
 
   defp search_error_message(:browser_busy),
     do: "Another Carrefour search is running. Please search again in a moment."

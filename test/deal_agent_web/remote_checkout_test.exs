@@ -73,6 +73,19 @@ defmodule DealAgentWeb.RemoteCheckoutTest do
     assert has_element?(view, "#carrefour-cart-status", "closed")
   end
 
+  test "Naivas address can be saved in app without geolocation or a separate browser window", %{
+    conn: conn
+  } do
+    {:ok, view, _} = live(conn, "/")
+    assert has_element?(view, "#naivas-address-setup button", "Set Naivas delivery address")
+    view |> element("#naivas-address-setup button") |> render_click()
+    wait_until(fn -> has_element?(view, "#private-checkout", "Naivas delivery address") end)
+    refute has_element?(view, "#private-checkout", "Private Naivas checkout")
+    view |> element("#private-checkout button[phx-value-action='confirm']") |> render_click()
+    wait_until(fn -> has_element?(view, "#naivas-delivery", "Location confirmed") end)
+    refute has_element?(view, "#private-checkout")
+  end
+
   defp wait_until(check, attempts \\ 150)
   defp wait_until(_, 0), do: flunk("remote checkout did not reach expected state")
 

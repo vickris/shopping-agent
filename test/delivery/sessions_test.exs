@@ -54,18 +54,28 @@ defmodule DealAgent.Delivery.SessionsTest do
 
   test "automatic location failures retry in their own session without manual confirmation" do
     point = %{"latitude" => -1.367, "longitude" => 36.936, "accuracy" => 100}
-    assert {:ok, id} = Sessions.start(self(), "naivas", "Automatic retry", point)
+    assert {:ok, id} = Sessions.start(self(), "carrefour", "Automatic retry", point)
     assert_receive {:delivery_event, ^id, %{"type" => "setup", "status" => "unavailable"}}, 3000
     assert {:error, :automatic_location} = Sessions.command(self(), id, "confirm")
     assert {:error, :session_unavailable} = Sessions.command(spawn(fn -> :ok end), id, "locate")
     assert :ok = Sessions.command(self(), id, "locate")
     assert {:error, :session_unavailable} = Sessions.command(self(), id, "locate")
-    assert {:error, :location_unconfirmed} = Sessions.search(self(), id, "naivas", "milk")
+    assert {:error, :location_unconfirmed} = Sessions.search(self(), id, "carrefour", "milk")
 
     assert_receive {:delivery_event, ^id,
                     %{"type" => "confirmed", "location" => %{"confirmation" => "geolocation"}}},
                    3000
 
+    assert {:ok, _} = Sessions.search(self(), id, "carrefour", "milk")
+    assert :ok = Sessions.command(self(), id, "close")
+  end
+
+  test "Naivas can confirm a saved address after automatic location setup" do
+    point = %{"latitude" => -1.367, "longitude" => 36.936, "accuracy" => 100}
+    assert {:ok, id} = Sessions.start(self(), "naivas", "Automatic retry", point)
+    assert_receive {:delivery_event, ^id, %{"type" => "setup", "status" => "unavailable"}}, 3000
+    assert :ok = Sessions.command(self(), id, "confirm")
+    assert_receive {:delivery_event, ^id, %{"type" => "confirmed"}}, 3000
     assert {:ok, _} = Sessions.search(self(), id, "naivas", "milk")
     assert :ok = Sessions.command(self(), id, "close")
   end

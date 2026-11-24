@@ -1,6 +1,19 @@
 import {cartStep} from '../../extension/adapters.js';
 import {openBrowserSession} from '../carrefour_browser/browser_handoff.mjs';
 
+// Navigation retries are GET-only. Never retry an uncertain add-to-cart action.
+export async function navigateCartPage(page,url) {
+  for(let attempt=0;attempt<2;attempt++) {
+    try {
+      const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
+      if(!response?.ok())throw Error('store_unavailable');
+      return;
+    } catch(error) {
+      if(attempt || !/NS_ERROR_NET_HTTP[23]_PROTOCOL_ERROR|ERR_HTTP2_PROTOCOL_ERROR/.test(error.message))throw error;
+    }
+  }
+}
+
 // The session stays on this computer. Only bounded progress messages leave it.
 export async function createLocalCart({plan,launch,emit}) {
   let browser=await launch(true),page,opened=false,busy=false,closed=false,verified=false;
@@ -10,19 +23,16 @@ export async function createLocalCart({plan,launch,emit}) {
     const context=await browser.newContext();
     page=await context.newPage();
   } catch(error) {await browser.close();throw error;}
-  const navigate=async url=>{
-    const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
-    if(!response?.ok())throw Error('store_unavailable');
-  };
+  const navigate=url=>navigateCartPage(page,url);
   const step=async(candidate,phase,product)=>{
     const result=await candidate.evaluate(cartStep,{store:'carrefour',phase,product,products:plan.products,readonly:phase==='verify',exact:phase==='verify'});
-    if(!result?.ok)throw Error('store_prompt');
+    if(!result?.ok)throw Object.assign(Error('store_prompt'),{userMessage:result?.error?.slice(0,500)});
   };
   return {
     async prepare() {
       busy=true;
       try {
-        emit({status:'loading',message:'Preparing a fresh Carrefour cart headlessly on this computer…'});
+        emit({status:'loading',message:`Adding ${plan.products[0].name} to Carrefour…`});
         await navigate('https://www.carrefour.ke/mafken/en/app/cart');
         await step(page,'probe');
         await step(page,'clear');
@@ -34,9 +44,9 @@ export async function createLocalCart({plan,launch,emit}) {
         await navigate('https://www.carrefour.ke/mafken/en/app/cart');
         await step(page,'verify');
         verified=true;
-        emit({status:'ready',message:'Carrefour cart verified. Click checkout to open a Carrefour browser window on this computer. Confirm your delivery address, fees and final total before paying.'});
-      } catch {
-        emit({status:'attention',message:'Carrefour could not verify the cart. Open Carrefour to inspect its delivery, stock or price requirements. Stop this attempt before preparing a fresh cart.'});
+        emit({status:'ready',message:'Your Carrefour cart is ready. Review it and checkout.'});
+      } catch(error) {
+        emit({status:'attention',message:error.userMessage || 'Carrefour could not load the cart. Open Carrefour to check the connection or delivery requirements, then stop this attempt before trying again.'});
       } finally {busy=false;}
     },
     async open() {

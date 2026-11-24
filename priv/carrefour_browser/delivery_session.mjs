@@ -221,7 +221,7 @@ try {
   if(point) {
     await locateAutomatically();
   } else {
-  await showWindow();
+  if(!setup.remote_checkout)await showWindow();
   emit({type:'setup',status:'awaiting_input',message:setup.store==='naivas'?'You can try selecting the address in Naivas. If its map does not update, choose Use this area for Naivas in the app to proceed with delivery unverified.':'Select your delivery area in this store window. For Quickmart press Continue after choosing the address; the selected branch will open automatically when you confirm. Confirm here only when the store accepts delivery to your area.'});
   }
   starting=false;

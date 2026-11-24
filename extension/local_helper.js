@@ -37,7 +37,7 @@ export function localHelper(chrome) {
         port=null;
         publish('closed','Local helper disconnected. Install or restart the helper, then prepare your cart again.').catch(()=>{});
       });
-      await publish('starting','Connecting to the local Carrefour helper…');
+      await publish('starting','Adding your selected items…');
       current.postMessage({action:'prepare',plan});
       return {accepted:Boolean(port),status:job.status,message:job.message,error:port?undefined:'Local helper unavailable. Install the helper and reload the extension before trying again.'};
     }

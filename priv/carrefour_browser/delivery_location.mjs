@@ -1,15 +1,16 @@
-import {modernNaivas,readModernNaivasLocation} from './naivas_storefront.mjs';
+import {modernNaivas,readModernNaivasLocation,naivasSearchURL} from './naivas_storefront.mjs';
 // Only visible store UI is used; no account data or cookies leave the browser.
 const roots = {carrefour: 'www.carrefour.ke', quickmart: 'www.quickmart.co.ke', naivas: 'www.naivas.online', foodplus: 'foodplus.co.ke'};
 export async function readLocation(page, store, {ignoreDialog = false} = {}) {
   const host = new URL(page.url()).hostname.replace(/^www\./, '');
   if (host !== roots[store]?.replace(/^www\./, '')) throw Error('location_unconfirmed');
-  const dialog = store === 'quickmart' ? '#frmModalPopupUserLocation:visible' : store === 'naivas' ? '#address_drawer[role="dialog"][aria-hidden="false"]:visible' : '[role="dialog"]:visible';
+  const modern=store==='naivas' && await modernNaivas(page);
+  const dialog = store === 'quickmart' ? '#frmModalPopupUserLocation:visible' : store === 'naivas' && !modern ? '#address_drawer[role="dialog"][aria-hidden="false"]:visible' : '[role="dialog"]:visible';
   if (!ignoreDialog && await page.locator(dialog).count()) throw Error('location_dialog_open');
   let label, branch_id, branch;
   if (store === 'carrefour') {
     label = (await page.locator('header button').filter({has: page.locator('img[src*="Caret_Down_Arrow_for_address_location"]')}).innerText({timeout: 3000})).trim();
-  } else if (store === 'naivas' && await modernNaivas(page)) {
+  } else if (store === 'naivas' && modern) {
     return await readModernNaivasLocation(page);
   } else if (store === 'naivas') {
     label = (await page.locator('.geoLocation:visible').first().innerText({timeout: 3000})).trim();
@@ -50,6 +51,12 @@ export async function confirmLocation(page, store, area, initial, navigate) {
     }
   }
   const location = await readLocation(page, store);
+  if(store==='naivas' && await modernNaivas(page)) {
+    await navigate(naivasSearchURL('milk'));
+    const retained=await readLocation(page,store);
+    if(retained.label!==location.label)throw Error('location_not_saved');
+    return {...retained,confirmation:'store_address'};
+  }
   return store === 'naivas' ? {...location, confirmation: 'user_override'} : location;
 }
 

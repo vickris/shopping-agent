@@ -77,6 +77,22 @@
     <p class="mt-2 text-sm text-gray-600">
       We select and confirm each store’s location automatically, then keep it for search and checkout.
     </p>
+    <div
+      :if={@remote_checkout_enabled}
+      id="naivas-address-setup"
+      class="mt-4 rounded-lg border border-gray-200 p-3"
+    >
+      <p class="text-sm">
+        Naivas needs your saved delivery address before adding items. Enter and confirm it here without leaving Shopping Agent.
+      </p>
+      <button
+        type="button"
+        phx-click="naivas-address"
+        class="mt-2 rounded bg-blue-600 px-3 py-2 text-sm text-white"
+      >
+        Set Naivas delivery address
+      </button>
+    </div>
     <details class="mt-4">
       <summary class="cursor-pointer text-sm text-gray-600">
         Store status and optional location settings
@@ -650,7 +666,7 @@
                   </button>
                   <p :if={store.id != "foodplus"} class="mt-2 text-xs text-gray-500">
                     <%= if helper_checkout do %>
-                      Prepares a fresh Carrefour cart headlessly on this computer. Click checkout when it is ready to open a Carrefour browser window. The local helper and desktop extension are required.
+                      We’ll add your selected items and notify you when your Carrefour cart is ready.
                     <% else %>
                       <%= if @browser_checkout_enabled do %>
                         Prepares a fresh supermarket cart in the background, replacing its existing contents. Stay here—we’ll notify you when it’s ready. Sign-in or delivery setup may need your attention.
@@ -789,10 +805,18 @@
   <div class="remote-checkout-header">
     <div>
       <h2 id="remote-checkout-heading">
-        Private {Enum.find(@stores, &(&1.id == @remote_store)).label} checkout
+        <%= if is_nil(@cart_jobs[@remote_store]) do %>
+          {Enum.find(@stores, &(&1.id == @remote_store)).label} delivery address
+        <% else %>
+          Private {Enum.find(@stores, &(&1.id == @remote_store)).label} checkout
+        <% end %>
       </h2>
       <p>
-        This is your store browser on our server. Review the address, final total and payment yourself. The session expires after 30 minutes or if you leave this page.
+        <%= if is_nil(@cart_jobs[@remote_store]) do %>
+          Enter and save your address in the store form below, then click Confirm saved delivery address. You can continue shopping here once the store confirms it.
+        <% else %>
+          Review the address, final total and payment yourself. The session expires after 30 minutes or if you leave this page.
+        <% end %>
       </p>
     </div>
     <button

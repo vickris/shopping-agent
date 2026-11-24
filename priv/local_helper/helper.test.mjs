@@ -45,3 +45,33 @@ test('prepares invisibly, opens only on request, restores exact cart without rep
     assert.deepEqual(launches,[true,false]);
   } finally {await cart.close();}
 });
+
+test('retries a protocol failure only for page navigation',async()=>{
+  const {navigateCartPage}=await import('./cart.mjs');
+  let reads=0;
+  await navigateCartPage({goto:async()=>{if(++reads===1)throw Error('NS_ERROR_NET_HTTP3_PROTOCOL_ERROR');return {ok:()=>true};}},'https://www.carrefour.ke/mafken/en/app/cart');
+  assert.equal(reads,2);
+  reads=0;
+  await assert.rejects(navigateCartPage({goto:async()=>{reads++;throw Error('store_access_denied');}},'https://www.carrefour.ke/mafken/en/app/cart'));
+  assert.equal(reads,1);
+});
+
+test('shows the actual Carrefour price error and never opens a window on failure',async()=>{
+  const events=[],launches=[];
+  const plan={store:'carrefour',products:[{id:'42',name:'Butter',url:'https://www.carrefour.ke/butter/p/42',packs:3,expected_price:'60.00'}]};
+  const launch=async headless=>{
+    launches.push(headless);
+    const browser=await chromium.launch({headless:true,channel:'chromium'});
+    const newContext=browser.newContext.bind(browser);
+    browser.newContext=async options=>{const context=await newContext(options);await context.route('https://www.carrefour.ke/**',route=>route.fulfill({contentType:'text/html',body:storefront('carrefour')}));return context;};
+    return browser;
+  };
+  const cart=await createLocalCart({plan,launch,emit:event=>events.push(event)});
+  try {
+    await cart.prepare();
+    assert.deepEqual(launches,[true]);
+    assert.equal(events.at(-1).status,'attention');
+    assert.match(events.at(-1).message,/price changed for Butter/);
+    assert.ok(events.every(event=>!/headless|preparing.*browser/i.test(event.message)));
+  } finally {await cart.close();}
+});

@@ -49,3 +49,15 @@ test('Carrefour still rejects an unchanged default area', async () => withPage(a
   await page.goto('https://www.carrefour.ke/');
   await assert.rejects(confirmLocation(page, 'carrefour', 'Syokimau', {label: 'Westlands'}), /location_not_saved/);
 }));
+
+test('modern Naivas confirms only the saved address retained after navigation',async()=>withPage(async page=>{
+  await page.route('https://www.naivas.online/**',route=>route.fulfill({contentType:'text/html',body:'<button data-slot="dropdown-menu-trigger"><span class="truncate">Gateway Mall, Syokimau</span></button>'}));
+  await page.goto('https://www.naivas.online/');
+  const result=await confirmLocation(page,'naivas','Naivas delivery address',undefined,url=>page.goto(url));
+  assert.deepEqual(result,{label:'Gateway Mall, Syokimau',confirmation:'store_address'});
+  assert.equal(new URL(page.url()).pathname,'/search');
+  await page.setContent('<button data-slot="dropdown-menu-trigger"><span class="truncate">Gateway Mall, Syokimau</span></button><div role="dialog">Delivery Address <input required></div>');
+  await assert.rejects(confirmLocation(page,'naivas','Naivas delivery address',undefined,url=>page.goto(url)),/location_dialog_open/);
+  await page.setContent('<button data-slot="dropdown-menu-trigger"><span class="truncate">Changed address</span></button>');
+  await assert.rejects(confirmLocation(page,'naivas','Naivas delivery address',undefined,url=>page.goto(url)),/location_not_saved/);
+}));
