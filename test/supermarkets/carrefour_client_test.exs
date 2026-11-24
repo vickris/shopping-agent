@@ -11,6 +11,17 @@ defmodule DealAgent.Supermarkets.CarrefourClientTest do
     def run(request), do: {request, %Req.TransportError{reason: :timeout}}
   end
 
+  defmodule ImageBrowser do
+    def search(query) do
+      send(self(), {:image_browser_search, query})
+      {:ok, [%{id: "247170", image_url: "https://cdn.mafrservices.com/milk.jpg"}]}
+    end
+  end
+
+  defmodule UnavailableBrowser do
+    def search(_query), do: {:error, :browser_timeout}
+  end
+
   # Reduced from the live Carrefour Kenya milk-search cards (2026-10-08).
   # Keep the actual selectors and nesting while excluding decorative elements.
   defp card(opts \\ []) do
@@ -113,8 +124,16 @@ defmodule DealAgent.Supermarkets.CarrefourClientTest do
   end
 
   test "image carousel groups inside a product card are not treated as extra products" do
-    carousel = "<div class='group'><div><a href='/mafken/en/milk/p/247170'><img alt='Product image'></a></div></div>"
-    html = String.replace(card(), "<div class=\"relative flex flex-col group\">", "<div class=\"relative flex flex-col group\">" <> carousel)
+    carousel =
+      "<div class='group'><div><a href='/mafken/en/milk/p/247170'><img alt='Product image'></a></div></div>"
+
+    html =
+      String.replace(
+        card(),
+        "<div class=\"relative flex flex-col group\">",
+        "<div class=\"relative flex flex-col group\">" <> carousel
+      )
+
     assert {:ok, [_]} = ResponseParser.parse(html)
   end
 
@@ -152,6 +171,23 @@ defmodule DealAgent.Supermarkets.CarrefourClientTest do
 
     assert {:error, {:carrefour_request_failed, %Req.TransportError{reason: :timeout}}} =
              Client.search("milk", request_options: [adapter: TimeoutAdapter])
+  end
+
+  test "hydrates missing images through the browser without losing usable HTTP results on failure" do
+    html = String.replace(card(), ~r/<img[^>]+>/, "")
+    plug = fn conn -> Plug.Conn.send_resp(conn, 200, html) end
+    options = [browser_fallback: true, request_options: [plug: plug]]
+
+    assert {:ok, [%{image_url: "https://cdn.mafrservices.com/milk.jpg"}]} =
+             Client.search("milk", Keyword.put(options, :browser_client, ImageBrowser))
+
+    assert_received {:image_browser_search, "milk"}
+
+    assert {:ok, [%{id: "247170", image_url: nil}]} =
+             Client.search("milk", Keyword.put(options, :browser_client, UnavailableBrowser))
+
+    assert {:ok, [%{image_url: nil}]} =
+             Client.search("milk", Keyword.put(options, :browser_fallback, false))
   end
 
   test "rejects blank queries without issuing a request" do

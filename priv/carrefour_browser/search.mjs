@@ -1,3 +1,4 @@
+import {loadCarrefourImages} from './carrefour_images.mjs';
 import {waitForNaivasSearch} from './naivas_storefront.mjs';
 // Fetch the public search page in an isolated, temporary browser context.
 // Product interpretation stays in the existing Elixir ResponseParser.
@@ -58,6 +59,7 @@ try {
       : store === "foodplus" ? ".products-grid li.product-item, .message.notice:has-text('Your search returned no results')"
       : "div.group a[href*='/p/'] span.line-clamp-2, img[src*='no-result-found.svg']")
       .first().waitFor({ state: "attached", timeout: 12000 });
+    if(store === 'carrefour')await loadCarrefourImages(page);
     finish({ html: await page.content() });
   }
 } catch (error) {

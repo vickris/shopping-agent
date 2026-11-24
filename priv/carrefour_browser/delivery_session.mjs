@@ -1,3 +1,4 @@
+import {loadCarrefourImages} from './carrefour_images.mjs';
 import {waitForNaivasSearch} from './naivas_storefront.mjs';
 // One temporary guest session per shopper/store. State never leaves this process.
 import readline from 'node:readline';
@@ -165,6 +166,7 @@ input.on('line',async line=>{
         : setup.store==='naivas' ? 'div.border-naivas-bg a span.line-clamp-2, h2:has-text("0 Search Results Found")'
         : setup.store==='foodplus' ? '.products-grid li.product-item, .message.notice:has-text("Your search returned no results")'
         : 'div.group a[href*="/p/"] span.line-clamp-2, img[src*="no-result-found.svg"]').first().waitFor({state:'attached',timeout:15000});
+      if(setup.store==='carrefour')await loadCarrefourImages(page);
       await assertLocation();
       emit({type:'reply',id:message.id,html:await page.content()});
     } else if(message.action==='cart') {

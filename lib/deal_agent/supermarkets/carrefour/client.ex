@@ -42,11 +42,19 @@ defmodule DealAgent.Supermarkets.Carrefour.Client do
 
     if enabled? and browser_retryable?(result) do
       browser = Keyword.get(opts, :browser_client, DealAgent.Supermarkets.Carrefour.BrowserClient)
-      browser.search(query)
+
+      case {result, browser.search(query)} do
+        {{:ok, _products}, {:error, _reason}} -> result
+        {_, enriched} -> enriched
+      end
     else
       result
     end
   end
+
+  # Server-rendered cards can contain prices before their deferred images mount.
+  defp browser_retryable?({:ok, [_ | _] = products}),
+    do: Enum.all?(products, &is_nil(&1.image_url))
 
   defp browser_retryable?({:error, :unexpected_search_response}), do: true
   defp browser_retryable?({:error, {:carrefour_request_failed, _reason}}), do: true
