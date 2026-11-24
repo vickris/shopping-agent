@@ -1,6 +1,32 @@
+import {cartStep} from './storefront_steps.mjs';
+import {modernNaivas,naivasLocationSelector} from './naivas_storefront.mjs';
+
+const naivasStep=async(page,phase,plan,product)=>{
+  const result=await page.evaluate(cartStep,{store:'naivas',phase,product,products:plan.products,readonly:phase==='verify',exact:phase==='verify'});
+  if(!result?.ok){
+    const code=/price changed/i.test(result?.error || '')?'price_changed':/delivery address/i.test(result?.error || '')?'location_unconfirmed':'cart_mismatch';
+    throw Object.assign(Error(code),{storeMessage:result?.error});
+  }
+};
 // Store adapters use visible storefront controls only. Never submit checkout.
 export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
   if(!['quickmart','naivas'].includes(plan.store))throw Error('checkout_unavailable');
+  if(plan.store==='naivas') {
+    await navigate('https://www.naivas.online/');
+    await page.locator(naivasLocationSelector+', .geoLocation').first().waitFor({state:'attached',timeout:20000});
+    if(await modernNaivas(page)) {
+      await naivasStep(page,'probe',plan);
+      await naivasStep(page,'clear',plan);
+      for(const product of plan.products) {
+        emit({status:'preparing',message:`Adding ${product.name} to Naivas…`});
+        await navigate(product.url);
+        await naivasStep(page,'items',plan,product);
+      }
+      await navigate('https://www.naivas.online/');
+      await naivasStep(page,'verify',plan);
+      return {status:'ready',verified:true,message:'Your Naivas cart is ready. Continue to checkout to review and pay.',estimated_total:plan.estimated_total,product_count:plan.products.length};
+    }
+  }
   const price = text => cents(text.replace(/KES|KSh|\s|,/gi, ''));
   const wait = async predicate => {
     for (let i = 0; i < 80; i++) {
@@ -78,6 +104,10 @@ export async function prepareStore({page, plan, navigate, cents, pause, emit}) {
 // Read-only verification also used after opening a prepared guest session.
 export async function verifyStoreCart({page,plan,cents}) {
   if(!['quickmart','naivas'].includes(plan.store))throw Error('checkout_unavailable');
+  if(plan.store==='naivas' && await modernNaivas(page)) {
+    await naivasStep(page,'verify',plan);
+    return;
+  }
   const price = text => cents(text.replace(/KES|KSh|\s|,/gi, ''));
   const wait = async predicate => {
     for(let i=0;i<80;i++) {

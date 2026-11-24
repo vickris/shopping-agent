@@ -672,7 +672,7 @@
                         Prepares a fresh supermarket cart in the background, replacing its existing contents. Stay here—we’ll notify you when it’s ready. Sign-in or delivery setup may need your attention.
                       <% else %>
                         <%= if @remote_checkout_enabled do %>
-                          Prepares your basket, then opens a private checkout view here. You review and pay directly in the store session.
+                          We’ll add your items and notify you when your cart is ready. Continue to checkout here to review and pay. No download is needed.
                         <% else %>
                           <%= if @local_browser_enabled do %>
                             Prepares your basket in the background. Open it on this computer to review and pay.
@@ -808,7 +808,7 @@
         <%= if is_nil(@cart_jobs[@remote_store]) do %>
           {Enum.find(@stores, &(&1.id == @remote_store)).label} delivery address
         <% else %>
-          Private {Enum.find(@stores, &(&1.id == @remote_store)).label} checkout
+          Checkout at {Enum.find(@stores, &(&1.id == @remote_store)).label}
         <% end %>
       </h2>
       <p>
@@ -844,7 +844,7 @@
       phx-value-action="close"
       phx-value-store={@remote_store}
     >
-      End private session
+      End shopping session
     </button>
   </div>
   <div
@@ -878,7 +878,7 @@
       <button type="button" data-remote-dialog="dismiss">Cancel</button>
     </div>
     <div class="remote-screen-wrap">
-      <img data-remote-screen alt="Interactive private supermarket checkout" draggable="false" />
+      <img data-remote-screen alt="Interactive supermarket checkout" draggable="false" />
     </div>
     <label class="remote-type-label">
       Type in the selected store field (also works on phones)

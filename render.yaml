@@ -26,7 +26,7 @@ services:
       - key: OPENROUTER_MODEL
         value: openai/gpt-4.1-mini
       - key: LOCAL_HELPER_ENABLED
-        value: "true"
+        value: "false"
       - key: BROWSER_CHECKOUT_ENABLED
         value: "false"
       - key: REMOTE_CHECKOUT_ENABLED

@@ -115,15 +115,16 @@ address** before preparing the cart. Catalogue comparison remains available.
 Existing Render services must update these environment variables and deploy the
 new version; changing the Blueprint does not update a running service by itself.
 
-### Local Carrefour checkout window
+### Optional local Carrefour checkout window
 
-For the desktop demo, `LOCAL_HELPER_ENABLED=true` routes Carrefour to the local
-native-messaging helper instead of embedded checkout. The extension must be
-version 0.5.0 or newer, and the helper must be installed on the shopper's computer.
-Preparation is headless; checkout opens a separate Carrefour Firefox window using
-the same guest cart, restored and verified locally. It does not open a tab in the
-existing Chrome session. See `priv/local_helper/README.md` for setup. Other stores
-continue to use their configured checkout flow.
+Hosted checkout uses `REMOTE_CHECKOUT_ENABLED=true` and
+`LOCAL_HELPER_ENABLED=false`. Shoppers do not install an extension or helper.
+Clicking checkout opens the retained store session inside Shopping Agent.
+This keeps its address, products and quantities together through payment.
+The remote flow takes precedence over a stale helper setting.
+
+The local helper remains available for desktop development when remote checkout
+is disabled. See `priv/local_helper/README.md` for that optional setup.
 
 ### Naivas address confirmation inside the app
 
@@ -138,3 +139,13 @@ can use this manual completion step; other stores retain automatic confirmation.
 The local Carrefour helper reports the store's specific cart errors. Protocol
 errors on page navigation can retry once; add-to-cart actions never retry after
 an uncertain result. Progress shows item additions and cart readiness.
+
+A saved address in a separate Naivas browser tab belongs to a different session
+from hosted cart preparation. Save it using **Set Naivas delivery address** in
+the app. Clicking **Prepare cart** before confirming the address opens that
+form instead of a generic location error. After confirmation, unchanged selected
+SKUs and pack counts are restored using fresh store results; changed prices or
+unavailable products require a new selection. The current Naivas React cart is
+filled and verified using the same storefront controls as the extension. Their
+canonical source is `priv/carrefour_browser/storefront_steps.mjs`;
+`mix extension.build` synchronizes the packaged extension copy.

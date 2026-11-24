@@ -11,7 +11,7 @@ defmodule DealAgent.Delivery.SessionsTest do
       assert :ok = Sessions.command(owner, id, "confirm")
       assert_receive {:delivery_event, ^id, %{"type" => "confirmed"}}, 3000
       assert {:ok, html} = Sessions.search(owner, id, store, "milk")
-      assert html =~ "Milk 500ml"
+      assert String.downcase(html) =~ "milk 500ml"
       assert {:error, :location_unconfirmed} = Sessions.search(owner, id, "other", "milk")
       assert {:error, :session_unavailable} = Sessions.command(spawn(fn -> :ok end), id, "open")
 

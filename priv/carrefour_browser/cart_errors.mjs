@@ -16,5 +16,5 @@ export function cartFailure(error) {
   const message = messages[code] || (code === 'cart_timeout'
     ? 'The store cart controls took too long to load. Products may already have been added; review the cart before trying again.'
     : 'The store cart controls could not be read. Products may already have been added; review the cart before trying again.');
-  return {status: 'failed', verified: false, error: code, message};
+  return {status: 'failed', verified: false, error: code, message: typeof error.storeMessage==='string'?error.storeMessage.slice(0,500):message};
 }

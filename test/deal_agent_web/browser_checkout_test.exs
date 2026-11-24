@@ -51,11 +51,11 @@ defmodule DealAgentWeb.BrowserCheckoutTest do
     refute has_element?(view, "#private-checkout")
   end
 
-  test "local Carrefour helper takes precedence over embedded checkout without a server cart", %{
+  test "local Carrefour helper remains opt-in when embedded checkout is disabled", %{
     conn: conn
   } do
     Application.put_env(:deal_agent, :local_helper_enabled, true)
-    Application.put_env(:deal_agent, :remote_checkout_enabled, true)
+    Application.put_env(:deal_agent, :remote_checkout_enabled, false)
     {:ok, view, _} = live(conn, "/")
     view |> form("#chat-form", chat: %{message: "2 litres of milk"}) |> render_submit()
     render_async(view, 1000)
@@ -69,7 +69,7 @@ defmodule DealAgentWeb.BrowserCheckoutTest do
              "#carrefour-browser-checkout a[href$='shopping-agent-local-helper.zip']"
            )
 
-    refute has_element?(view, "#naivas-browser-checkout")
+    assert has_element?(view, "#naivas-browser-checkout")
 
     view
     |> element("button.shop-now[phx-value-store='carrefour']", "Prepare cart")

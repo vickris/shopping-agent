@@ -5,7 +5,7 @@ export async function readLocation(page, store, {ignoreDialog = false} = {}) {
   const host = new URL(page.url()).hostname.replace(/^www\./, '');
   if (host !== roots[store]?.replace(/^www\./, '')) throw Error('location_unconfirmed');
   const modern=store==='naivas' && await modernNaivas(page);
-  const dialog = store === 'quickmart' ? '#frmModalPopupUserLocation:visible' : store === 'naivas' && !modern ? '#address_drawer[role="dialog"][aria-hidden="false"]:visible' : '[role="dialog"]:visible';
+  const dialog = store === 'quickmart' ? '#frmModalPopupUserLocation:visible' : store === 'naivas' && !modern ? '#address_drawer[role="dialog"][aria-hidden="false"]:visible' : store==='naivas' ? '[role="dialog"]:not([data-slot="sheet-content"]):visible' : '[role="dialog"]:visible';
   if (!ignoreDialog && await page.locator(dialog).count()) throw Error('location_dialog_open');
   let label, branch_id, branch;
   if (store === 'carrefour') {

@@ -12,7 +12,8 @@ input.on('line',line=>{
  if(m.action==='confirm' && setup.area==='Retry' && confirmations++===0){setTimeout(()=>emit({type:'confirmation_failed',message:'Save the store delivery address, then try again.'}),100);return;}
  if(m.action==='confirm')emit({type:'confirmed',location:{area:setup.area,label:setup.area+', Kenya',...(setup.store==='naivas'?{confirmation:setup.area==='Naivas delivery address'?'store_address':'user_override'}:{}),...(setup.store==='quickmart'?{branch_id:'7701'}:{})}});
  if(m.action==='search'){
-  const reply=()=>emit(m.query==='changed'?{type:'reply',id:m.id,error:'location_changed'}:{type:'reply',id:m.id,html:`<div class="group"><a href="/mafken/en/milk/p/247170"><span class="line-clamp-2">Milk 500ml</span></a><div class="items-baseline"><span>KES</span><span>65.00</span></div><span class="line-clamp-1">500ml</span><button aria-label="Add to cart"></button></div>`});
+  const naivasHTML='<h2>1 Search Results Found</h2><div class="border-naivas-bg"><input name="product_id" value="naivas-milk"><a title="Naivas Milk" href="https://www.naivas.online/naivas-milk"><span class="line-clamp-2">Naivas Milk 500Ml</span></a><div class="product-price"><span class="font-bold">KES 70.00</span></div><form><button>ADD TO CART</button></form></div>';
+  const reply=()=>emit(m.query==='changed'?{type:'reply',id:m.id,error:'location_changed'}:{type:'reply',id:m.id,html:setup.store==='naivas'?naivasHTML:`<div class="group"><a href="/mafken/en/milk/p/247170"><span class="line-clamp-2">Milk 500ml</span></a><div class="items-baseline"><span>KES</span><span>65.00</span></div><span class="line-clamp-1">500ml</span><button aria-label="Add to cart"></button></div>`});
   if(m.query==='slow')setTimeout(reply,200);else reply();
   if(m.query==='changed')emit({type:'invalidated'});
  }

@@ -7,11 +7,11 @@ SKUs into an exact whole-pack quantity. Each product is capped at 50 packs.
 DeliverySessions reuses the location-confirmed search browser for cart preparation
 (Firefox for Carrefour/Naivas, Chromium for Quickmart). Cookies stay in the same
 temporary browser context; no new guest session replaces the confirmed session.
-The cart browser is visible on the local Phoenix server's desktop so the user can
-continue in the same session. This initial implementation requires a desktop;
-it is not a remote/headless-server checkout integration. A generic cart link in
-another browser would lose this guest session, so Show store window brings
-forward the existing browser instead.
+For a hosted deployment, the store session stays on the server. Shoppers enter
+required addresses in the app and open the same interactive session to review
+and pay. The hosted flow requires no extension or local helper installation.
+A normal retailer tab has separate cookies and cannot inherit this guest cart.
+Local development can still open the retained browser on the server computer.
 
 The runner opens each exact selected SKU page, checks its current selling price,
 adds only that product, and waits for each quantity acknowledgement before the

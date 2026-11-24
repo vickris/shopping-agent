@@ -5,6 +5,8 @@ defmodule Mix.Tasks.Extension.Build do
   @impl true
   def run(_) do
     source = Path.expand("extension")
+    # Keep the extension's serialized storefront controls identical to the server.
+    File.cp!("priv/carrefour_browser/storefront_steps.mjs", Path.join(source, "adapters.js"))
 
     names =
       ~w(manifest.json policy.js adapters.js background.js local_helper.js bridge.js checkout.html checkout.js checkout.css README.md)

@@ -29,10 +29,11 @@ extension ID; there is no localhost HTTP service or pairing token.
 
 ## App configuration and use
 
-Set `LOCAL_HELPER_ENABLED=true` on the app and restart/deploy it. This takes
-precedence for Carrefour only; `REMOTE_CHECKOUT_ENABLED=true` can remain enabled
-for other stores. The Render Blueprint includes both settings. Existing services
-must update their environment settings explicitly.
+Set `LOCAL_HELPER_ENABLED=true` on the app and restart/deploy it. This optional
+desktop mode requires
+`REMOTE_CHECKOUT_ENABLED=false`. Hosted checkout takes precedence when enabled
+and requires no helper installation. The Render Blueprint uses hosted checkout
+by default. Existing services must update their environment settings explicitly.
 
 Prepare the cart, keep Shopping Agent open, then click **Open cart & checkout**.
 Nothing opens during preparation. If Carrefour requires a location, login, stock

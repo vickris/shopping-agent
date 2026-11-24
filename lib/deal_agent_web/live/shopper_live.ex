@@ -67,8 +67,10 @@ defmodule DealAgentWeb.ShopperLive do
      )
      |> assign(
        :local_helper_enabled,
-       Application.get_env(:deal_agent, :local_helper_enabled, false)
+       Application.get_env(:deal_agent, :local_helper_enabled, false) and
+         not Application.get_env(:deal_agent, :remote_checkout_enabled, false)
      )
+     |> assign(:naivas_address_choices, %{})
      |> assign(:pending_address_store, nil)
      |> assign(:remote_store, nil)
      |> assign(:shopping_list, ShoppingList.new())
@@ -346,52 +348,18 @@ defmodule DealAgentWeb.ShopperLive do
   def handle_event("shop-now", params, %{assigns: %{browser_checkout_enabled: true}} = socket),
     do: export_browser_basket(params, socket)
 
-  @impl true
-  def handle_event("shop-now", %{"store" => store_id} = params, socket) do
-    case store_for(params) do
-      nil ->
-        {:noreply, put_flash(socket, :error, "Unknown supermarket.")}
-
-      store ->
-        current = socket.assigns.cart_jobs[store_id]
-
-        if current && current.status != "closed" do
-          {:noreply,
-           put_flash(
-             socket,
-             :error,
-             "Close the existing #{store.label} cart window before preparing another basket."
-           )}
-        else
-          with {:ok, plan} <-
-                 CartPlan.build(
-                   socket.assigns.shopping_list.items,
-                   socket.assigns[store.selections_key],
-                   store.adapter.name()
-                 ),
-               {:ok, id} <- start_cart(socket, store, plan) do
-            job = %{
-              id: id,
-              status: "preparing",
-              message:
-                "Preparing #{store.label} for #{plan.selected_count} selected item(s); skipping #{plan.skipped_count} unselected item(s)…",
-              estimated_total: plan.estimated_total
-            }
-
-            {:noreply,
-             assign(socket, :cart_jobs, Map.put(socket.assigns.cart_jobs, store_id, job))}
-          else
-            {:error, reason} ->
-              {:noreply,
-               put_flash(
-                 socket,
-                 :error,
-                 String.replace(cart_error_message(reason), "Carrefour", store.label)
-               )}
-          end
-        end
-    end
+  def handle_event(
+        "shop-now",
+        %{"store" => "naivas"} = params,
+        %{assigns: %{remote_checkout_enabled: true}} = socket
+      ) do
+    if get_in(socket.assigns.delivery_sessions, ["naivas", :status]) == "confirmed",
+      do: prepare_server_cart(params, socket),
+      else: handle_event("naivas-address", %{}, socket)
   end
+
+  @impl true
+  def handle_event("shop-now", params, socket), do: prepare_server_cart(params, socket)
 
   def handle_event("cart-window", %{"action" => action} = params, socket)
       when action in ["open", "close", "resume"] do
@@ -1000,7 +968,17 @@ defmodule DealAgentWeb.ShopperLive do
              )}
 
           %{"type" => "confirmed", "location" => location} ->
+            choices =
+              if store_id == "naivas" and location["confirmation"] == "store_address",
+                do: socket.assigns.naivas_selections,
+                else: %{}
+
             socket = invalidate_store(socket, store)
+
+            socket =
+              if store_id == "naivas",
+                do: assign(socket, :naivas_address_choices, choices),
+                else: socket
 
             socket =
               if store_id == "naivas" and location["confirmation"] == "store_address" and
@@ -1355,7 +1333,56 @@ defmodule DealAgentWeb.ShopperLive do
         end
       end)
 
+    socket =
+      if store.id == "naivas", do: assign(socket, :naivas_address_choices, %{}), else: socket
+
     socket |> assign(store.results_key, %{}) |> assign(store.selections_key, %{})
+  end
+
+  defp prepare_server_cart(%{"store" => store_id} = params, socket) do
+    case store_for(params) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Unknown supermarket.")}
+
+      store ->
+        current = socket.assigns.cart_jobs[store_id]
+
+        if current && current.status != "closed" do
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "Close the existing #{store.label} cart window before preparing another basket."
+           )}
+        else
+          with {:ok, plan} <-
+                 CartPlan.build(
+                   socket.assigns.shopping_list.items,
+                   socket.assigns[store.selections_key],
+                   store.adapter.name()
+                 ),
+               {:ok, id} <- start_cart(socket, store, plan) do
+            job = %{
+              id: id,
+              status: "preparing",
+              message:
+                "Preparing #{store.label} for #{plan.selected_count} selected item(s); skipping #{plan.skipped_count} unselected item(s)…",
+              estimated_total: plan.estimated_total
+            }
+
+            {:noreply,
+             assign(socket, :cart_jobs, Map.put(socket.assigns.cart_jobs, store_id, job))}
+          else
+            {:error, reason} ->
+              {:noreply,
+               put_flash(
+                 socket,
+                 :error,
+                 String.replace(cart_error_message(reason), "Carrefour", store.label)
+               )}
+          end
+        end
+    end
   end
 
   defp open_address_view(socket, store_id, id) do
@@ -1457,15 +1484,59 @@ defmodule DealAgentWeb.ShopperLive do
 
     if store && Enum.any?(socket.assigns.stores, &(&1.id == store_id)) &&
          Enum.any?(socket.assigns.shopping_list.items, &(&1.id == item_id)) do
-      assign(
-        socket,
-        store.results_key,
-        Map.put(socket.assigns[store.results_key], item_id, result)
-      )
+      socket
+      |> assign(store.results_key, Map.put(socket.assigns[store.results_key], item_id, result))
+      |> restore_address_choice(store_id, item_id, result)
     else
       socket
     end
   end
+
+  defp restore_address_choice(socket, "naivas", item_id, result) do
+    {previous, remaining} = Map.pop(socket.assigns.naivas_address_choices, item_id)
+    socket = assign(socket, :naivas_address_choices, remaining)
+
+    if previous do
+      with {:ok, result} <- result,
+           metadata = result.metadata || %{},
+           false <- Map.get(metadata, :comparison_only, false),
+           true <- is_nil(previous[:search_query]) or result.query == previous.search_query,
+           session_id when not is_nil(session_id) <- metadata[:delivery_session_id],
+           true <- session_id == get_in(socket.assigns.delivery_sessions, ["naivas", :id]),
+           product when not is_nil(product) <-
+             Enum.find(result.products, &(&1.id == previous.product.id)),
+           true <- Decimal.equal?(product.price, previous.product.price),
+           item when not is_nil(item) <-
+             Enum.find(socket.assigns.shopping_list.items, &(&1.id == item_id)),
+           {:ok, selection} <- Selection.new(item, product) do
+        selection =
+          selection
+          |> Selection.resize(previous.packs)
+          |> Map.merge(%{
+            search_query: result.query,
+            comparison_only: false,
+            delivery_session_id: session_id
+          })
+
+        assign(
+          socket,
+          :naivas_selections,
+          Map.put(socket.assigns.naivas_selections, item_id, selection)
+        )
+      else
+        _ ->
+          put_flash(
+            socket,
+            :info,
+            "Naivas refreshed prices and availability for your address. Review and select any changed or unavailable items again."
+          )
+      end
+    else
+      socket
+    end
+  end
+
+  defp restore_address_choice(socket, _, _, _), do: socket
 
   defp prune_search_results(socket) do
     item_ids = Enum.map(socket.assigns.shopping_list.items, & &1.id)
